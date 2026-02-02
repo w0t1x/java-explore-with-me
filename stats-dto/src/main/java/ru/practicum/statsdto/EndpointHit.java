@@ -15,7 +15,8 @@ public class EndpointHit {
     @NotNull
     private LocalDateTime timestamp;
 
-    public EndpointHit() {}
+    public EndpointHit() {
+    }
 
     public EndpointHit(String app, String uri, String ip, LocalDateTime timestamp) {
         this.app = app;
@@ -24,7 +25,6 @@ public class EndpointHit {
         this.timestamp = timestamp;
     }
 
-    // Геттеры вручную
     public String getApp() {
         return app;
     }
@@ -41,7 +41,6 @@ public class EndpointHit {
         return timestamp;
     }
 
-    // Сеттеры вручную
     public void setApp(String app) {
         this.app = app;
     }
