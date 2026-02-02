@@ -1,0 +1,6 @@
+cat > stats-server/.dockerignore << EOF
+*
+
+!target/*.jar
+!Dockerfile
+EOF
