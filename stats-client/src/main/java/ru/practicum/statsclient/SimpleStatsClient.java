@@ -65,7 +65,8 @@ public class SimpleStatsClient implements StatsClient {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
-            return objectMapper.readValue(response.body(), new TypeReference<List<ViewStats>>() {});
+            return objectMapper.readValue(response.body(), new TypeReference<List<ViewStats>>() {
+            });
         } catch (Exception e) {
             System.err.println("Ошибка при получении статистики: " + e.getMessage());
             return List.of();
