@@ -14,7 +14,6 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 @Slf4j
 public class StatService {
-
     private final StatsClient statsClient;
 
     @Value("${app.name:ewm-main-service}")
@@ -37,20 +36,26 @@ public class StatService {
             log.debug("Saved hit: {}", hit);
         } catch (Exception e) {
             log.error("Failed to save hit: {}", e.getMessage());
+            // Не выбрасываем исключение, чтобы не ломать основной функционал
         }
     }
 
     private String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
+        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip.split(",")[0];
         }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
+
+        ip = request.getHeader("Proxy-Client-IP");
+        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip;
         }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
+
+        ip = request.getHeader("WL-Proxy-Client-IP");
+        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip;
         }
-        return ip;
+
+        return request.getRemoteAddr();
     }
 }

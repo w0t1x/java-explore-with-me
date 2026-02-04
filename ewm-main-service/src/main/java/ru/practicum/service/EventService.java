@@ -54,8 +54,17 @@ public class EventService {
         Category category = categoryRepository.findById(newEventDto.getCategory())
                 .orElseThrow(() -> new NotFoundException("категория с id=" + newEventDto.getCategory() + " не найдена"));
 
+        if (newEventDto.getParticipantLimit() < 0) {
+            throw new ValidationException("Лимит участников не может быть отрицательным");
+        }
+
+        if (newEventDto.getParticipantLimit() < 0) {
+            throw new ValidationException("Лимит участников не может быть отрицательным");
+        }
+
+        // Проверка на 2 часа до события
         if (newEventDto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ValidationException("До даты мероприятия должно быть не менее 2 часов");
+            throw new ConflictException("До даты мероприятия должно быть не менее 2 часов");
         }
 
         Event event = eventMapper.toEvent(newEventDto);
@@ -103,7 +112,7 @@ public class EventService {
     @Transactional
     public EventFullDto updateEventByUser(Long userId, Long eventId, UpdateEventUserRequest updateRequest) {
         userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("Пользователь id=" + eventId + " не найден"));
+                .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
@@ -112,10 +121,21 @@ public class EventService {
             throw new ConflictException("Можно изменить только отложенные или отмененные события");
         }
 
+        // Проверка на отрицательный participantLimit
+        if (updateRequest.getParticipantLimit() != null && updateRequest.getParticipantLimit() < 0) {
+            throw new ValidationException("Лимит участников не может быть отрицательным");
+        }
+
+        // Проверка на дату события (минимум 2 часа от текущего момента)
         if (updateRequest.getEventDate() != null) {
             if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
                 throw new ConflictException("До даты мероприятия должно быть не менее 2 часов");
             }
+        }
+
+        // Проверка на дату события в прошлом (если передана)
+        if (updateRequest.getEventDate() != null && updateRequest.getEventDate().isBefore(LocalDateTime.now())) {
+            throw new ConflictException("Дата события не может быть в прошлом");
         }
 
         updateEventFields(event, updateRequest);
@@ -135,34 +155,26 @@ public class EventService {
         return eventMapper.toEventFullDto(updatedEvent);
     }
 
-    // Admin API методы
-
-    public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
-                                               LocalDateTime rangeStart, LocalDateTime rangeEnd,
-                                               Integer from, Integer size) {
-        Pageable pageable = PageRequest.of(from / size, size, Sort.by("id").descending());
-
-        Page<Event> eventPage = eventRepository.findEventsByAdmin(
-                users, states, categories, rangeStart, rangeEnd, pageable);
-
-        List<Event> events = eventPage.getContent();
-        Map<Long, Long> views = getViewsForEvents(events);
-        events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
-
-        return events.stream()
-                .map(eventMapper::toEventFullDto)
-                .collect(Collectors.toList());
-    }
-
     @Transactional
     public EventFullDto updateEventByAdmin(Long eventId, UpdateEventAdminRequest updateRequest) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
+        // Проверка на отрицательный participantLimit
+        if (updateRequest.getParticipantLimit() != null && updateRequest.getParticipantLimit() < 0) {
+            throw new ValidationException("Лимит участников не может быть отрицательным");
+        }
+
+        // Проверка на дату события (минимум 1 час от текущего момента для публикации)
         if (updateRequest.getEventDate() != null) {
             if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
                 throw new ConflictException("До даты мероприятия должно быть не менее 1 часа");
             }
+        }
+
+        // Проверка на дату события в прошлом (если передана)
+        if (updateRequest.getEventDate() != null && updateRequest.getEventDate().isBefore(LocalDateTime.now())) {
+            throw new ConflictException("Дата события не может быть в прошлом");
         }
 
         if (updateRequest.getStateAction() != null) {
@@ -170,6 +182,10 @@ public class EventService {
                 case PUBLISH_EVENT:
                     if (event.getState() != EventState.PENDING) {
                         throw new ConflictException("Не удается опубликовать событие, потому что оно находится в неправильном состоянии: " + event.getState());
+                    }
+                    // Проверка, что дата события не менее чем через час от текущего момента
+                    if (event.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
+                        throw new ConflictException("Нельзя опубликовать событие, которое начинается менее чем через час");
                     }
                     event.setState(EventState.PUBLISHED);
                     event.setPublishedOn(LocalDateTime.now());
@@ -195,11 +211,13 @@ public class EventService {
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
                                                HttpServletRequest request) {
+        // Исправление деления при пагинации
+        int page = from / size;
         Pageable pageable;
         if ("VIEWS".equals(sort)) {
-            pageable = PageRequest.of(from / size, size, Sort.by("views").descending());
+            pageable = PageRequest.of(page, size, Sort.by("views").descending());
         } else {
-            pageable = PageRequest.of(from / size, size, Sort.by("eventDate").descending());
+            pageable = PageRequest.of(page, size, Sort.by("eventDate").descending());
         }
 
         if (rangeStart == null && rangeEnd == null) {
@@ -211,8 +229,10 @@ public class EventService {
 
         List<Event> events = eventPage.getContent();
 
-        // Сохраняем статистику
-        statService.saveHit(request);
+        // Сохраняем статистику для публичного запроса
+        if (request != null) {
+            statService.saveHit(request);
+        }
 
         // Получаем просмотры из сервиса статистики
         Map<Long, Long> views = getViewsForEvents(events);
@@ -323,15 +343,19 @@ public class EventService {
                 .collect(Collectors.toList());
 
         LocalDateTime start = LocalDateTime.now().minusYears(1);
-        LocalDateTime end = LocalDateTime.now();
+        LocalDateTime end = LocalDateTime.now().plusSeconds(1); // +1 секунда для включения текущего времени
 
         try {
             List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
 
             return stats.stream()
                     .collect(Collectors.toMap(
-                            stat -> Long.parseLong(stat.getUri().substring("/events/".length())),
-                            ViewStats::getHits
+                            stat -> {
+                                String uri = stat.getUri();
+                                return Long.parseLong(uri.substring(uri.lastIndexOf('/') + 1));
+                            },
+                            ViewStats::getHits,
+                            (v1, v2) -> v1 + v2 // суммируем дубликаты
                     ));
         } catch (Exception e) {
             log.error("Ошибка при получении статистики из сервиса статистики: {}", e.getMessage());

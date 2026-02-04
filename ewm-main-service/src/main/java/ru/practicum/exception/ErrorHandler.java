@@ -126,6 +126,7 @@ public class ErrorHandler {
                 .build();
     }
 
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiError handleDataIntegrityViolation(DataIntegrityViolationException e) {
