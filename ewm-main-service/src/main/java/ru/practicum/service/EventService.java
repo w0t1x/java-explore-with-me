@@ -155,6 +155,25 @@ public class EventService {
         return eventMapper.toEventFullDto(updatedEvent);
     }
 
+    // Admin API методы
+
+    public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
+                                               LocalDateTime rangeStart, LocalDateTime rangeEnd,
+                                               Integer from, Integer size) {
+        Pageable pageable = PageRequest.of(from / size, size, Sort.by("id").descending());
+
+        Page<Event> eventPage = eventRepository.findEventsByAdmin(
+                users, states, categories, rangeStart, rangeEnd, pageable);
+
+        List<Event> events = eventPage.getContent();
+        Map<Long, Long> views = getViewsForEvents(events);
+        events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
+
+        return events.stream()
+                .map(eventMapper::toEventFullDto)
+                .collect(Collectors.toList());
+    }
+
     @Transactional
     public EventFullDto updateEventByAdmin(Long eventId, UpdateEventAdminRequest updateRequest) {
         Event event = eventRepository.findById(eventId)
