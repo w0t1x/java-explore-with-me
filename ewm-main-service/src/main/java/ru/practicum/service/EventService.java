@@ -52,6 +52,7 @@ public class EventService {
         Category category = categoryRepository.findById(newEventDto.getCategory())
                 .orElseThrow(() -> new NotFoundException("Категория с id=" + newEventDto.getCategory() + " не найдена"));
 
+        // ВАЖНО: проверка должна быть на будущее время (не менее 2 часов от текущего момента)
         if (newEventDto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
             throw new ValidationException("До даты мероприятия должно быть не менее 2 часов");
         }
@@ -77,10 +78,6 @@ public class EventService {
         }
         if (size == null || size <= 0) {
             size = 10;
-        }
-
-        if (size == 0) {
-            size = 10; // избегаем деления на ноль
         }
 
         userRepository.findById(userId)
@@ -121,12 +118,18 @@ public class EventService {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
+        // ВАЖНО: проверка состояния должна быть ПЕРВОЙ
         if (event.getState() == EventState.PUBLISHED) {
             throw new ConflictException("Можно изменить только отложенные или отмененные события");
         }
 
+        // ВАЖНО: если дата уже наступила - это 400 Bad Request (ValidationException), а не 409 Conflict
         if (updateRequest.getEventDate() != null) {
-            if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
+            LocalDateTime now = LocalDateTime.now();
+            if (updateRequest.getEventDate().isBefore(now)) {
+                throw new ValidationException("Дата события не может быть в прошлом");
+            }
+            if (updateRequest.getEventDate().isBefore(now.plusHours(2))) {
                 throw new ValidationException("До даты мероприятия должно быть не менее 2 часов");
             }
         }
@@ -151,17 +154,10 @@ public class EventService {
     public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Integer from, Integer size) {
-        // Валидация параметров
-        if (from == null || from < 0) {
-            from = 0;
-        }
-        if (size == null || size <= 0) {
-            size = 10;
-        }
-
-        if (size == 0) {
-            size = 10;
-        }
+        // Валидация параметров с обработкой null
+        if (from == null || from < 0) from = 0;
+        if (size == null || size <= 0) size = 10;
+        if (size == 0) size = 10;
 
         int page = from / size;
         Sort sort = Sort.by("id").descending();
@@ -184,8 +180,10 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
+        // ВАЖНО: проверка даты для администратора
         if (updateRequest.getEventDate() != null) {
-            if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
+            LocalDateTime now = LocalDateTime.now();
+            if (updateRequest.getEventDate().isBefore(now.plusHours(1))) {
                 throw new ConflictException("До даты мероприятия должно быть не менее 1 часа");
             }
         }
@@ -218,23 +216,15 @@ public class EventService {
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
                                                HttpServletRequest request) {
-        // Валидация параметров
-        if (from == null || from < 0) {
-            from = 0;
-        }
-        if (size == null || size <= 0) {
-            size = 10;
-        }
-
-        if (size == 0) {
-            size = 10;
-        }
+        // ВАЖНО: корректная обработка параметров с дефолтными значениями
+        if (from == null || from < 0) from = 0;
+        if (size == null || size <= 0) size = 10;
+        if (size == 0) size = 10;
 
         int page = from / size;
         Pageable pageable;
 
         if ("VIEWS".equals(sort)) {
-            // Для сортировки по просмотрам сначала получаем события, потом сортируем в памяти
             pageable = PageRequest.of(page, size);
         } else {
             pageable = PageRequest.of(page, size, Sort.by("eventDate").ascending());
@@ -245,21 +235,29 @@ public class EventService {
             rangeStart = LocalDateTime.now();
         }
 
+        // ВАЖНО: обрабатываем случаи когда categories пустой или null
+        List<Long> categoriesList = (categories == null || categories.isEmpty()) ? null : categories;
+
         Page<Event> eventPage = eventRepository.findEventsPublic(
-                text, categories, paid, rangeStart, rangeEnd, onlyAvailable, pageable);
+                text, categoriesList, paid, rangeStart, rangeEnd,
+                onlyAvailable != null ? onlyAvailable : false, pageable);
 
         List<Event> events = eventPage.getContent();
 
-        // Сохраняем статистику для эндпоинта /events
+        // ВАЖНО: сохраняем статистику ТОЛЬКО если запрос успешен
         statService.saveHit(request);
 
         // Получаем просмотры
         Map<Long, Long> views = getViewsForEvents(events);
         events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
 
-        // Если сортировка по VIEWS, сортируем в памяти
+        // Сортировка по просмотрам в памяти
         if ("VIEWS".equals(sort)) {
             events.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
+            // Ограничиваем размер после сортировки
+            if (events.size() > size) {
+                events = events.subList(0, Math.min(size, events.size()));
+            }
         }
 
         return events.stream()
@@ -280,7 +278,8 @@ public class EventService {
 
         // Получаем просмотры
         List<ViewStats> stats = getStatsForEvent(event);
-        event.setViews(stats.isEmpty() ? 0L : stats.get(0).getHits());
+        Long currentViews = stats.isEmpty() ? 0L : stats.get(0).getHits();
+        event.setViews(currentViews);
 
         return eventMapper.toEventFullDto(event);
     }
@@ -370,7 +369,7 @@ public class EventService {
         try {
             List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
 
-            if (stats == null || stats.isEmpty()) {
+            if (stats == null) {
                 return Collections.emptyMap();
             }
 
@@ -379,7 +378,12 @@ public class EventService {
             for (ViewStats stat : stats) {
                 if (stat.getUri() != null && stat.getUri().startsWith("/events/")) {
                     try {
-                        String idStr = stat.getUri().substring("/events/".length());
+                        String uri = stat.getUri();
+                        // Убираем параметры запроса, если есть
+                        if (uri.contains("?")) {
+                            uri = uri.substring(0, uri.indexOf('?'));
+                        }
+                        String idStr = uri.substring("/events/".length());
                         Long eventId = Long.parseLong(idStr);
                         viewsMap.put(eventId, stat.getHits());
                     } catch (NumberFormatException e) {

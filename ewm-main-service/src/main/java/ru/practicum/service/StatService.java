@@ -31,6 +31,12 @@ public class StatService {
             String uri = request.getRequestURI();
             String ip = getClientIp(request);
 
+            // ВАЖНО: проверяем, что URI не null
+            if (uri == null || uri.isEmpty()) {
+                log.warn("URI is null or empty");
+                return;
+            }
+
             EndpointHit hit = EndpointHit.builder()
                     .app(app)
                     .uri(uri)
@@ -40,14 +46,17 @@ public class StatService {
 
             // Проверить, что statsClient не null
             if (statsClient != null) {
-                statsClient.hit(hit);
-                log.debug("Сохранен просмотр: {}", hit);
+                try {
+                    statsClient.hit(hit);
+                    log.debug("Сохранен просмотр: {}", hit);
+                } catch (Exception e) {
+                    log.warn("Не удалось отправить статистику: {}", e.getMessage());
+                }
             } else {
                 log.warn("StatsClient is null, cannot save hit");
             }
         } catch (Exception e) {
             log.warn("Не удалось сохранить просмотр в сервисе статистики: {}", e.getMessage());
-            // Не бросаем исключение, чтобы основная функциональность продолжала работать
         }
     }
 

@@ -24,6 +24,19 @@ public class ErrorHandler {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    // Добавляем обработку NullPointerException - это вызовет 500, но лучше 400
+    @ExceptionHandler(NullPointerException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleNullPointer(NullPointerException e) {
+        log.error("NullPointerException: {}", e.getMessage(), e);
+        return ApiError.builder()
+                .status("BAD_REQUEST")
+                .reason("Некорректные данные в запросе")
+                .message("Не все обязательные поля заполнены")
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiError handleNotFound(NotFoundException e) {
@@ -146,7 +159,7 @@ public class ErrorHandler {
         return ApiError.builder()
                 .status("BAD_REQUEST")
                 .reason("Неправильно составленный запрос.")
-                .message("Некорректные параметры пагинации: деление на ноль")
+                .message("Некорректные параметры пагинации")
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }
