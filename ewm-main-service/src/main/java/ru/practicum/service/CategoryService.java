@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.dto.category.CategoryDto;
@@ -74,7 +75,8 @@ public class CategoryService {
     }
 
     public List<CategoryDto> getCategories(Integer from, Integer size) {
-        Pageable pageable = PageRequest.of(from / size, size);
+        int page = from / size;
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
 
         return categoryRepository.findAll(pageable).stream()
                 .map(categoryMapper::toCategoryDto)

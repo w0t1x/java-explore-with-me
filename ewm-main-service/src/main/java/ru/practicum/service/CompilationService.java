@@ -78,13 +78,15 @@ public class CompilationService {
     }
 
     public List<CompilationDto> getCompilations(Boolean pinned, Integer from, Integer size) {
-        Pageable pageable = PageRequest.of(from / size, size);
+        int page = from / size;
+        Pageable pageable = PageRequest.of(page, size);
+
         List<Compilation> compilations;
 
         if (pinned == null) {
             compilations = compilationRepository.findAll(pageable).getContent();
         } else {
-            compilations = compilationRepository.findByPinned(pinned, pageable).getContent();
+            compilations = compilationRepository.findAllByPinned(pinned, pageable).getContent();
         }
 
         return compilations.stream()

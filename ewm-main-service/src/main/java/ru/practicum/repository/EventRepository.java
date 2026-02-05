@@ -37,8 +37,8 @@ public interface EventRepository extends JpaRepository<Event, Long> {
     // Для публичного API
     @Query("SELECT e FROM Event e " +
             "WHERE e.state = 'PUBLISHED' " +
-            "AND (:text IS NULL OR LOWER(e.annotation) LIKE LOWER(CONCAT('%', :text, '%')) " +
-            "OR LOWER(e.description) LIKE LOWER(CONCAT('%', :text, '%'))) " +
+            "AND (:text IS NULL OR (LOWER(e.annotation) LIKE LOWER(CONCAT('%', :text, '%')) " +
+            "OR LOWER(e.description) LIKE LOWER(CONCAT('%', :text, '%')))) " +
             "AND (:categories IS NULL OR e.category.id IN :categories) " +
             "AND (:paid IS NULL OR e.paid = :paid) " +
             "AND (:rangeStart IS NULL OR e.eventDate >= :rangeStart) " +
@@ -59,10 +59,4 @@ public interface EventRepository extends JpaRepository<Event, Long> {
 
     @Query("SELECT COUNT(e) FROM Event e WHERE e.category.id = :categoryId")
     long countByCategoryId(@Param("categoryId") Long categoryId);
-
-    @Query("SELECT e FROM Event e WHERE e.id IN :eventIds AND e.state = 'PUBLISHED'")
-    List<Event> findPublishedEventsByIds(@Param("eventIds") Set<Long> eventIds);
-
-    @Query("SELECT e FROM Event e WHERE e.state = 'PUBLISHED' AND e.eventDate > :now")
-    List<Event> findUpcomingPublishedEvents(@Param("now") LocalDateTime now);
 }

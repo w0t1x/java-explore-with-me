@@ -49,14 +49,13 @@ public class UserService {
     }
 
     public List<UserDto> getUsers(List<Long> ids, Integer from, Integer size) {
-        Pageable pageable = PageRequest.of(from / size, size);
+        int page = from / size;
+        Pageable pageable = PageRequest.of(page, size);
         List<User> users;
 
         if (ids == null || ids.isEmpty()) {
-            // Если IDs не указаны, получаем всех пользователей
             users = userRepository.findAll(pageable).getContent();
         } else {
-            // Используем кастомный метод с пагинацией
             users = userRepository.findUsersByIds(ids, pageable).getContent();
         }
 
