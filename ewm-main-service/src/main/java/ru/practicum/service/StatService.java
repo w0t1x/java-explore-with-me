@@ -26,20 +26,25 @@ public class StatService {
             return;
         }
 
-        String app = appName;
-        String uri = request.getRequestURI();
-        String ip = getClientIp(request);
-
-        EndpointHit hit = EndpointHit.builder()
-                .app(app)
-                .uri(uri)
-                .ip(ip)
-                .timestamp(LocalDateTime.now())
-                .build();
-
         try {
-            statsClient.hit(hit);
-            log.debug("Сохранен просмотр: {}", hit);
+            String app = appName;
+            String uri = request.getRequestURI();
+            String ip = getClientIp(request);
+
+            EndpointHit hit = EndpointHit.builder()
+                    .app(app)
+                    .uri(uri)
+                    .ip(ip)
+                    .timestamp(LocalDateTime.now())
+                    .build();
+
+            // Проверить, что statsClient не null
+            if (statsClient != null) {
+                statsClient.hit(hit);
+                log.debug("Сохранен просмотр: {}", hit);
+            } else {
+                log.warn("StatsClient is null, cannot save hit");
+            }
         } catch (Exception e) {
             log.warn("Не удалось сохранить просмотр в сервисе статистики: {}", e.getMessage());
             // Не бросаем исключение, чтобы основная функциональность продолжала работать

@@ -4,6 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -138,7 +139,6 @@ public class ErrorHandler {
                 .build();
     }
 
-    // Добавляем обработку ArithmeticException (деление на ноль)
     @ExceptionHandler(ArithmeticException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError handleArithmeticException(ArithmeticException e) {
@@ -146,12 +146,11 @@ public class ErrorHandler {
         return ApiError.builder()
                 .status("BAD_REQUEST")
                 .reason("Неправильно составленный запрос.")
-                .message("Некорректные параметры пагинации")
+                .message("Некорректные параметры пагинации: деление на ноль")
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }
 
-    // Добавляем обработку IllegalArgumentException
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError handleIllegalArgumentException(IllegalArgumentException e) {
@@ -160,6 +159,18 @@ public class ErrorHandler {
                 .status("BAD_REQUEST")
                 .reason("Неправильно составленный запрос.")
                 .message(e.getMessage())
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleHttpMessageNotReadable(HttpMessageNotReadableException e) {
+        log.error("Некорректное тело запроса: {}", e.getMessage());
+        return ApiError.builder()
+                .status("BAD_REQUEST")
+                .reason("Неправильно составленный запрос.")
+                .message("Некорректный формат JSON в теле запроса")
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }

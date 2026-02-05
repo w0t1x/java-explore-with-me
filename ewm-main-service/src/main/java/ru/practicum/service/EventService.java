@@ -79,6 +79,10 @@ public class EventService {
             size = 10;
         }
 
+        if (size == 0) {
+            size = 10; // избегаем деления на ноль
+        }
+
         userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
@@ -155,6 +159,10 @@ public class EventService {
             size = 10;
         }
 
+        if (size == 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Sort sort = Sort.by("id").descending();
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -218,11 +226,16 @@ public class EventService {
             size = 10;
         }
 
+        if (size == 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Pageable pageable;
 
         if ("VIEWS".equals(sort)) {
-            pageable = PageRequest.of(page, size, Sort.by("views").descending());
+            // Для сортировки по просмотрам сначала получаем события, потом сортируем в памяти
+            pageable = PageRequest.of(page, size);
         } else {
             pageable = PageRequest.of(page, size, Sort.by("eventDate").ascending());
         }
@@ -243,6 +256,11 @@ public class EventService {
         // Получаем просмотры
         Map<Long, Long> views = getViewsForEvents(events);
         events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
+
+        // Если сортировка по VIEWS, сортируем в памяти
+        if ("VIEWS".equals(sort)) {
+            events.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
+        }
 
         return events.stream()
                 .map(eventMapper::toEventShortDto)
@@ -338,7 +356,7 @@ public class EventService {
     }
 
     private Map<Long, Long> getViewsForEvents(List<Event> events) {
-        if (events.isEmpty()) {
+        if (events == null || events.isEmpty()) {
             return Collections.emptyMap();
         }
 
@@ -350,26 +368,27 @@ public class EventService {
         LocalDateTime end = LocalDateTime.now();
 
         try {
-            List<ViewStats> stats = statsClient.getStats(start, end, uris, false);
+            List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
 
-            if (stats == null) {
+            if (stats == null || stats.isEmpty()) {
                 return Collections.emptyMap();
             }
 
-            return stats.stream()
-                    .filter(stat -> stat.getUri() != null && stat.getUri().startsWith("/events/"))
-                    .collect(Collectors.toMap(
-                            stat -> {
-                                try {
-                                    String idStr = stat.getUri().substring("/events/".length());
-                                    return Long.parseLong(idStr);
-                                } catch (NumberFormatException e) {
-                                    return -1L;
-                                }
-                            },
-                            ViewStats::getHits,
-                            (existing, replacement) -> existing
-                    ));
+            Map<Long, Long> viewsMap = new HashMap<>();
+
+            for (ViewStats stat : stats) {
+                if (stat.getUri() != null && stat.getUri().startsWith("/events/")) {
+                    try {
+                        String idStr = stat.getUri().substring("/events/".length());
+                        Long eventId = Long.parseLong(idStr);
+                        viewsMap.put(eventId, stat.getHits());
+                    } catch (NumberFormatException e) {
+                        log.warn("Не удалось распарсить ID события из URI: {}", stat.getUri());
+                    }
+                }
+            }
+
+            return viewsMap;
         } catch (Exception e) {
             log.error("Ошибка при получении статистики из сервиса статистики: {}", e.getMessage());
             return Collections.emptyMap();
@@ -377,12 +396,17 @@ public class EventService {
     }
 
     private List<ViewStats> getStatsForEvent(Event event) {
+        if (event == null) {
+            return Collections.emptyList();
+        }
+
         String uri = "/events/" + event.getId();
         LocalDateTime start = LocalDateTime.now().minusYears(1);
         LocalDateTime end = LocalDateTime.now();
 
         try {
-            return statsClient.getStats(start, end, List.of(uri), false);
+            List<ViewStats> stats = statsClient.getStats(start, end, List.of(uri), true);
+            return stats != null ? stats : Collections.emptyList();
         } catch (Exception e) {
             log.error("Ошибка при получении статистики по событию {}: {}", event.getId(), e.getMessage());
             return Collections.emptyList();

@@ -49,7 +49,7 @@ public class CompilationService {
     @Transactional
     public void deleteCompilation(Long compId) {
         Compilation compilation = compilationRepository.findById(compId)
-                .orElseThrow(() -> new NotFoundException("Категория с id=" + compId + " не был найден"));
+                .orElseThrow(() -> new NotFoundException("Компиляция с id=" + compId + " не была найдена"));
 
         compilationRepository.delete(compilation);
         log.info("Deleted compilation with id={}", compId);
@@ -58,7 +58,7 @@ public class CompilationService {
     @Transactional
     public CompilationDto updateCompilation(Long compId, @Valid UpdateCompilationRequest updateRequest) {
         Compilation compilation = compilationRepository.findById(compId)
-                .orElseThrow(() -> new NotFoundException("Категория с id=" + compId + " не был найден"));
+                .orElseThrow(() -> new NotFoundException("Компиляция с id=" + compId + " не была найдена"));
 
         if (updateRequest.getEvents() != null) {
             Set<Event> events = new HashSet<>(eventRepository.findByIdIn(updateRequest.getEvents()));
@@ -83,6 +83,10 @@ public class CompilationService {
             from = 0;
         }
         if (size == null || size <= 0) {
+            size = 10;
+        }
+
+        if (size == 0) {
             size = 10;
         }
 

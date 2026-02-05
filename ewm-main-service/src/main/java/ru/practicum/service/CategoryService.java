@@ -83,6 +83,10 @@ public class CategoryService {
             size = 10;
         }
 
+        if (size == 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Pageable pageable = PageRequest.of(page, size, Sort.by("id").ascending());
 

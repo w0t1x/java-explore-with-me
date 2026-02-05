@@ -57,6 +57,10 @@ public class UserService {
             size = 10;
         }
 
+        if (size == 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Pageable pageable = PageRequest.of(page, size);
         List<User> users;
