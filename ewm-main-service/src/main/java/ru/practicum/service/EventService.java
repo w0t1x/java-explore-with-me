@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.dto.event.*;
 import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
-import ru.practicum.exception.ValidationException;
 import ru.practicum.mapper.EventMapper;
 import ru.practicum.model.Category;
 import ru.practicum.model.Event;
@@ -25,6 +24,7 @@ import ru.practicum.statsclient.StatsClient;
 import ru.practicum.statsdto.ViewStats;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -41,6 +41,10 @@ public class EventService {
     private final StatsClient statsClient;
     private final StatService statService;
 
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    // Private API методы
+
     @Transactional
     public EventFullDto createEvent(Long userId, NewEventDto newEventDto) {
         User user = userRepository.findById(userId)
@@ -50,7 +54,7 @@ public class EventService {
                 .orElseThrow(() -> new NotFoundException("Категория с id=" + newEventDto.getCategory() + " не найдена"));
 
         if (newEventDto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ValidationException("До даты мероприятия должно быть не менее 2 часов");
+            throw new ConflictException("До даты мероприятия должно быть не менее 2 часов");
         }
 
         Event event = eventMapper.toEvent(newEventDto);
@@ -72,7 +76,7 @@ public class EventService {
                 .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
         int page = from / size;
-        Pageable pageable = PageRequest.of(page, size, Sort.by("eventDate").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id").descending());
         List<Event> events = eventRepository.findByInitiatorId(userId, pageable).getContent();
 
         Map<Long, Long> views = getViewsForEvents(events);
@@ -110,7 +114,7 @@ public class EventService {
 
         if (updateRequest.getEventDate() != null) {
             if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-                throw new ValidationException("До даты мероприятия должно быть не менее 2 часов"); // Изменено с ConflictException на ValidationException
+                throw new ConflictException("До даты мероприятия должно быть не менее 2 часов");
             }
         }
 
@@ -130,6 +134,8 @@ public class EventService {
         Event updatedEvent = eventRepository.save(event);
         return eventMapper.toEventFullDto(updatedEvent);
     }
+
+    // Admin API методы
 
     public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
@@ -156,8 +162,11 @@ public class EventService {
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
         if (updateRequest.getEventDate() != null) {
-            if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
-                throw new ConflictException("До даты мероприятия должно быть не менее 1 часа");
+            if (updateRequest.getEventDate().isBefore(LocalDateTime.now())) {
+                throw new ConflictException("Дата события не может быть в прошлом");
+            }
+            if (updateRequest.getEventDate().isBefore(event.getPublishedOn().plusHours(1))) {
+                throw new ConflictException("Дата начала изменяемого события должна быть не ранее чем за час от даты публикации");
             }
         }
 
@@ -185,6 +194,8 @@ public class EventService {
         return eventMapper.toEventFullDto(updatedEvent);
     }
 
+    // Public API методы
+
     public List<EventShortDto> getEventsPublic(String text, List<Long> categories, Boolean paid,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
@@ -207,7 +218,9 @@ public class EventService {
 
         List<Event> events = eventPage.getContent();
 
-        statService.saveHit(request);
+        if (request != null) {
+            statService.saveHit(request);
+        }
 
         Map<Long, Long> views = getViewsForEvents(events);
         events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
@@ -225,7 +238,9 @@ public class EventService {
             throw new NotFoundException("Событие с id=" + eventId + " не найдено");
         }
 
-        statService.saveHit(request);
+        if (request != null) {
+            statService.saveHit(request);
+        }
 
         List<ViewStats> stats = getStatsForEvent(event);
         event.setViews(stats.isEmpty() ? 0L : stats.get(0).getHits());
@@ -316,15 +331,16 @@ public class EventService {
         LocalDateTime end = LocalDateTime.now().plusSeconds(1);
 
         try {
-            List<ViewStats> stats = statsClient.getStats(start, end, uris, false);
+            List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
 
             return stats.stream()
                     .collect(Collectors.toMap(
                             stat -> Long.parseLong(stat.getUri().substring("/events/".length())),
-                            ViewStats::getHits
+                            ViewStats::getHits,
+                            (existing, replacement) -> existing
                     ));
         } catch (Exception e) {
-            log.error("Ошибка при получении статистики из сервиса статистики: {}", e.getMessage());
+            log.warn("Ошибка при получении статистики из сервиса статистики: {}", e.getMessage());
             return Collections.emptyMap();
         }
     }
@@ -335,9 +351,9 @@ public class EventService {
         LocalDateTime end = LocalDateTime.now().plusSeconds(1);
 
         try {
-            return statsClient.getStats(start, end, List.of(uri), false);
+            return statsClient.getStats(start, end, List.of(uri), true);
         } catch (Exception e) {
-            log.error("Ошибка при получении статистики по событию {}: {}", event.getId(), e.getMessage());
+            log.warn("Ошибка при получении статистики по событию {}: {}", event.getId(), e.getMessage());
             return Collections.emptyList();
         }
     }

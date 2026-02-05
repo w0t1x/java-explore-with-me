@@ -14,12 +14,18 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 @Slf4j
 public class StatService {
+
     private final StatsClient statsClient;
 
     @Value("${app.name:ewm-main-service}")
     private String appName;
 
     public void saveHit(HttpServletRequest request) {
+        if (request == null) {
+            log.warn("Запрос не может быть null");
+            return;
+        }
+
         String app = appName;
         String uri = request.getRequestURI();
         String ip = getClientIp(request);
@@ -33,29 +39,28 @@ public class StatService {
 
         try {
             statsClient.hit(hit);
-            log.debug("Saved hit: {}", hit);
+            log.debug("Сохранен просмотр: {}", hit);
         } catch (Exception e) {
-            log.error("Failed to save hit: {}", e.getMessage());
-            // Не выбрасываем исключение, чтобы не ломать основной функционал
+            log.warn("Не удалось сохранить просмотр в сервисе статистики: {}", e.getMessage());
         }
     }
 
     private String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
-        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-            return ip.split(",")[0];
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
         }
 
-        ip = request.getHeader("Proxy-Client-IP");
-        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-            return ip;
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
         }
 
-        ip = request.getHeader("WL-Proxy-Client-IP");
-        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
-            return ip;
-        }
-
-        return request.getRemoteAddr();
+        return ip;
     }
 }

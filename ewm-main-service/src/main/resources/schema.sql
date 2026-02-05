@@ -28,15 +28,15 @@ CREATE TABLE IF NOT EXISTS events
     description        VARCHAR(7000),
     event_date         TIMESTAMP WITHOUT TIME ZONE,
     initiator_id       BIGINT,
-    lat                FLOAT,
-    lon                FLOAT,
+    lat                DOUBLE PRECISION,
+    lon                DOUBLE PRECISION,
     paid               BOOLEAN DEFAULT false,
     participant_limit  INTEGER DEFAULT 0,
     published_on       TIMESTAMP WITHOUT TIME ZONE,
     request_moderation BOOLEAN DEFAULT true,
     state              VARCHAR(50),
     title              VARCHAR(120),
-    views              BIGINT  DEFAULT 0
+    views              BIGINT DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS requests
