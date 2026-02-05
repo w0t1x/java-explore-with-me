@@ -25,7 +25,6 @@ import ru.practicum.statsclient.StatsClient;
 import ru.practicum.statsdto.ViewStats;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,8 +41,6 @@ public class EventService {
     private final StatsClient statsClient;
     private final StatService statService;
 
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
     @Transactional
     public EventFullDto createEvent(Long userId, NewEventDto newEventDto) {
         User user = userRepository.findById(userId)
@@ -52,8 +49,8 @@ public class EventService {
         Category category = categoryRepository.findById(newEventDto.getCategory())
                 .orElseThrow(() -> new NotFoundException("Категория с id=" + newEventDto.getCategory() + " не найдена"));
 
-        // ВАЖНО: проверка должна быть на будущее время (не менее 2 часов от текущего момента)
-        if (newEventDto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
+        LocalDateTime eventDate = newEventDto.getEventDate();
+        if (eventDate == null || eventDate.isBefore(LocalDateTime.now().plusHours(2))) {
             throw new ValidationException("До даты мероприятия должно быть не менее 2 часов");
         }
 
@@ -65,34 +62,40 @@ public class EventService {
         event.setConfirmedRequests(0);
         event.setViews(0L);
 
+        // Устанавливаем значения по умолчанию, если они не пришли
+        if (event.getPaid() == null) event.setPaid(false);
+        if (event.getParticipantLimit() == null) event.setParticipantLimit(0);
+        if (event.getRequestModeration() == null) event.setRequestModeration(true);
+
         Event savedEvent = eventRepository.save(event);
-        log.info("Созданное событие с id={} пользователем id={}", savedEvent.getId(), userId);
+        log.info("Создано событие с id={} пользователем id={}", savedEvent.getId(), userId);
 
         return eventMapper.toEventFullDto(savedEvent);
     }
 
     public List<EventShortDto> getEventsByUser(Long userId, Integer from, Integer size) {
-        // Валидация параметров
-        if (from == null || from < 0) {
-            from = 0;
-        }
-        if (size == null || size <= 0) {
-            size = 10;
-        }
+        validatePaginationParams(from, size);
 
         userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
         int page = from / size;
         Pageable pageable = PageRequest.of(page, size, Sort.by("eventDate").descending());
-        List<Event> events = eventRepository.findByInitiatorId(userId, pageable).getContent();
+        Page<Event> eventPage = eventRepository.findByInitiatorId(userId, pageable);
 
-        // Получаем просмотры
+        if (eventPage == null || eventPage.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Event> events = eventPage.getContent();
         Map<Long, Long> views = getViewsForEvents(events);
-        events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
+        events.forEach(event -> {
+            event.setViews(views.getOrDefault(event.getId(), 0L));
+        });
 
         return events.stream()
                 .map(eventMapper::toEventShortDto)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -103,11 +106,14 @@ public class EventService {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
-        // Получаем просмотры
         List<ViewStats> stats = getStatsForEvent(event);
         event.setViews(stats.isEmpty() ? 0L : stats.get(0).getHits());
 
-        return eventMapper.toEventFullDto(event);
+        EventFullDto result = eventMapper.toEventFullDto(event);
+        if (result == null) {
+            throw new RuntimeException("Ошибка при маппинге события");
+        }
+        return result;
     }
 
     @Transactional
@@ -118,12 +124,11 @@ public class EventService {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
-        // ВАЖНО: проверка состояния должна быть ПЕРВОЙ
         if (event.getState() == EventState.PUBLISHED) {
             throw new ConflictException("Можно изменить только отложенные или отмененные события");
         }
 
-        // ВАЖНО: если дата уже наступила - это 400 Bad Request (ValidationException), а не 409 Conflict
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: проверка даты на уже наступившую -> 400, а не 409
         if (updateRequest.getEventDate() != null) {
             LocalDateTime now = LocalDateTime.now();
             if (updateRequest.getEventDate().isBefore(now)) {
@@ -148,23 +153,33 @@ public class EventService {
         }
 
         Event updatedEvent = eventRepository.save(event);
-        return eventMapper.toEventFullDto(updatedEvent);
+        EventFullDto result = eventMapper.toEventFullDto(updatedEvent);
+        if (result == null) {
+            throw new RuntimeException("Ошибка при маппинге обновленного события");
+        }
+        return result;
     }
 
     public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Integer from, Integer size) {
-        // Валидация параметров с обработкой null
-        if (from == null || from < 0) from = 0;
-        if (size == null || size <= 0) size = 10;
-        if (size == 0) size = 10;
+        validatePaginationParams(from, size);
+
+        // Фиксируем null для пустых списков
+        List<Long> filteredUsers = (users == null || users.isEmpty()) ? null : users;
+        List<EventState> filteredStates = (states == null || states.isEmpty()) ? null : states;
+        List<Long> filteredCategories = (categories == null || categories.isEmpty()) ? null : categories;
 
         int page = from / size;
         Sort sort = Sort.by("id").descending();
         Pageable pageable = PageRequest.of(page, size, sort);
 
         Page<Event> eventPage = eventRepository.findEventsByAdmin(
-                users, states, categories, rangeStart, rangeEnd, pageable);
+                filteredUsers, filteredStates, filteredCategories, rangeStart, rangeEnd, pageable);
+
+        if (eventPage == null || eventPage.isEmpty()) {
+            return Collections.emptyList();
+        }
 
         List<Event> events = eventPage.getContent();
         Map<Long, Long> views = getViewsForEvents(events);
@@ -172,6 +187,7 @@ public class EventService {
 
         return events.stream()
                 .map(eventMapper::toEventFullDto)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -180,10 +196,8 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
-        // ВАЖНО: проверка даты для администратора
         if (updateRequest.getEventDate() != null) {
-            LocalDateTime now = LocalDateTime.now();
-            if (updateRequest.getEventDate().isBefore(now.plusHours(1))) {
+            if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
                 throw new ConflictException("До даты мероприятия должно быть не менее 1 часа");
             }
         }
@@ -209,79 +223,117 @@ public class EventService {
         updateEventFields(event, updateRequest);
 
         Event updatedEvent = eventRepository.save(event);
-        return eventMapper.toEventFullDto(updatedEvent);
+        EventFullDto result = eventMapper.toEventFullDto(updatedEvent);
+        if (result == null) {
+            throw new RuntimeException("Ошибка при маппинге события администратором");
+        }
+        return result;
     }
 
     public List<EventShortDto> getEventsPublic(String text, List<Long> categories, Boolean paid,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
                                                HttpServletRequest request) {
-        // ВАЖНО: корректная обработка параметров с дефолтными значениями
-        if (from == null || from < 0) from = 0;
-        if (size == null || size <= 0) size = 10;
-        if (size == 0) size = 10;
+        validatePaginationParams(from, size);
 
-        int page = from / size;
-        Pageable pageable;
-
-        if ("VIEWS".equals(sort)) {
-            pageable = PageRequest.of(page, size);
-        } else {
-            pageable = PageRequest.of(page, size, Sort.by("eventDate").ascending());
-        }
-
-        // Если диапазон дат не указан, показываем будущие события
-        if (rangeStart == null && rangeEnd == null) {
-            rangeStart = LocalDateTime.now();
-        }
-
-        // ВАЖНО: обрабатываем случаи когда categories пустой или null
-        List<Long> categoriesList = (categories == null || categories.isEmpty()) ? null : categories;
-
-        Page<Event> eventPage = eventRepository.findEventsPublic(
-                text, categoriesList, paid, rangeStart, rangeEnd,
-                onlyAvailable != null ? onlyAvailable : false, pageable);
-
-        List<Event> events = eventPage.getContent();
-
-        // ВАЖНО: сохраняем статистику ТОЛЬКО если запрос успешен
+        // Сохраняем хит статистики в начале
         statService.saveHit(request);
 
-        // Получаем просмотры
-        Map<Long, Long> views = getViewsForEvents(events);
-        events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
+        // Обрабатываем параметры
+        List<Long> filteredCategories = (categories == null || categories.isEmpty()) ? null : categories;
+        Boolean filteredPaid = paid;
+        LocalDateTime filteredRangeStart = rangeStart;
+        LocalDateTime filteredRangeEnd = rangeEnd;
+        Boolean filteredOnlyAvailable = onlyAvailable != null ? onlyAvailable : false;
 
-        // Сортировка по просмотрам в памяти
-        if ("VIEWS".equals(sort)) {
-            events.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
-            // Ограничиваем размер после сортировки
-            if (events.size() > size) {
-                events = events.subList(0, Math.min(size, events.size()));
-            }
+        // Если диапазон дат не указан, показываем будущие события
+        if (filteredRangeStart == null && filteredRangeEnd == null) {
+            filteredRangeStart = LocalDateTime.now();
         }
 
-        return events.stream()
-                .map(eventMapper::toEventShortDto)
-                .collect(Collectors.toList());
+        int page = from / size;
+        Pageable pageable = createPageableForPublicEvents(sort, page, size);
+
+        try {
+            Page<Event> eventPage = eventRepository.findEventsPublic(
+                    text, filteredCategories, filteredPaid, filteredRangeStart,
+                    filteredRangeEnd, filteredOnlyAvailable, pageable);
+
+            if (eventPage == null || eventPage.isEmpty()) {
+                return Collections.emptyList();
+            }
+
+            List<Event> events = eventPage.getContent();
+
+            // Получаем просмотры для всех событий
+            Map<Long, Long> views = getViewsForEvents(events);
+            events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
+
+            // Если нужна сортировка по просмотрам, делаем её в памяти
+            if ("VIEWS".equals(sort)) {
+                events.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
+            }
+
+            // Маппим и фильтруем null
+            List<EventShortDto> result = events.stream()
+                    .map(eventMapper::toEventShortDto)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("Ошибка при получении публичных событий: {}", e.getMessage(), e);
+            throw new RuntimeException("Ошибка при обработке запроса событий");
+        }
     }
 
     public EventFullDto getEventPublic(Long eventId, HttpServletRequest request) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
-
-        if (event.getState() != EventState.PUBLISHED) {
-            throw new NotFoundException("Событие с id=" + eventId + " не найдено");
-        }
-
-        // Сохраняем статистику
+        // Сохраняем хит статистики в начале
         statService.saveHit(request);
 
-        // Получаем просмотры
-        List<ViewStats> stats = getStatsForEvent(event);
-        Long currentViews = stats.isEmpty() ? 0L : stats.get(0).getHits();
-        event.setViews(currentViews);
+        try {
+            Event event = eventRepository.findById(eventId)
+                    .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
-        return eventMapper.toEventFullDto(event);
+            if (event.getState() != EventState.PUBLISHED) {
+                throw new NotFoundException("Событие с id=" + eventId + " не найдено");
+            }
+
+            // Получаем статистику просмотров и увеличиваем на 1
+            List<ViewStats> stats = getStatsForEvent(event);
+            Long currentViews = stats.isEmpty() ? 0L : stats.get(0).getHits();
+            event.setViews(currentViews + 1); // Увеличиваем просмотры на 1
+
+            EventFullDto result = eventMapper.toEventFullDto(event);
+            if (result == null) {
+                throw new RuntimeException("Ошибка при маппинге публичного события");
+            }
+            return result;
+
+        } catch (NotFoundException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Ошибка при получении публичного события {}: {}", eventId, e.getMessage(), e);
+            throw new RuntimeException("Ошибка при обработке запроса события");
+        }
+    }
+
+    private Pageable createPageableForPublicEvents(String sort, int page, int size) {
+        if ("VIEWS".equals(sort)) {
+            return PageRequest.of(page, size);
+        } else {
+            return PageRequest.of(page, size, Sort.by("eventDate").ascending());
+        }
+    }
+
+    private void validatePaginationParams(Integer from, Integer size) {
+        if (from == null || from < 0) {
+            from = 0;
+        }
+        if (size == null || size <= 0) {
+            size = 10;
+        }
     }
 
     private void updateEventFields(Event event, UpdateEventUserRequest updateRequest) {
@@ -369,7 +421,7 @@ public class EventService {
         try {
             List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
 
-            if (stats == null) {
+            if (stats == null || stats.isEmpty()) {
                 return Collections.emptyMap();
             }
 
@@ -386,7 +438,7 @@ public class EventService {
                         String idStr = uri.substring("/events/".length());
                         Long eventId = Long.parseLong(idStr);
                         viewsMap.put(eventId, stat.getHits());
-                    } catch (NumberFormatException e) {
+                    } catch (Exception e) {
                         log.warn("Не удалось распарсить ID события из URI: {}", stat.getUri());
                     }
                 }

@@ -22,7 +22,7 @@ public class StatService {
 
     public void saveHit(HttpServletRequest request) {
         if (request == null) {
-            log.warn("Запрос не может быть null");
+            log.warn("Request is null in saveHit");
             return;
         }
 
@@ -31,32 +31,30 @@ public class StatService {
             String uri = request.getRequestURI();
             String ip = getClientIp(request);
 
-            // ВАЖНО: проверяем, что URI не null
             if (uri == null || uri.isEmpty()) {
-                log.warn("URI is null or empty");
+                log.warn("URI is null or empty for request: {}", request);
                 return;
             }
 
             EndpointHit hit = EndpointHit.builder()
                     .app(app)
                     .uri(uri)
-                    .ip(ip)
+                    .ip(ip != null ? ip : "0.0.0.0")
                     .timestamp(LocalDateTime.now())
                     .build();
 
-            // Проверить, что statsClient не null
+            log.debug("Sending hit to stats service: {}", hit);
+
             if (statsClient != null) {
-                try {
-                    statsClient.hit(hit);
-                    log.debug("Сохранен просмотр: {}", hit);
-                } catch (Exception e) {
-                    log.warn("Не удалось отправить статистику: {}", e.getMessage());
-                }
+                // Просто вызываем метод, не присваиваем результат
+                statsClient.hit(hit);
+                log.debug("Successfully saved hit for URI: {}", uri);
             } else {
-                log.warn("StatsClient is null, cannot save hit");
+                log.warn("StatsClient is null, cannot save hit for URI: {}", uri);
             }
         } catch (Exception e) {
-            log.warn("Не удалось сохранить просмотр в сервисе статистики: {}", e.getMessage());
+            log.error("Error saving hit for request {}: {}", request.getRequestURI(), e.getMessage());
+            // Не бросаем исключение дальше - статистика не должна ломать основную логику
         }
     }
 

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import ru.practicum.dto.ApiError;
 
 import java.time.LocalDateTime;
@@ -23,19 +24,6 @@ import java.util.stream.Collectors;
 public class ErrorHandler {
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-    // Добавляем обработку NullPointerException - это вызовет 500, но лучше 400
-    @ExceptionHandler(NullPointerException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiError handleNullPointer(NullPointerException e) {
-        log.error("NullPointerException: {}", e.getMessage(), e);
-        return ApiError.builder()
-                .status("BAD_REQUEST")
-                .reason("Некорректные данные в запросе")
-                .message("Не все обязательные поля заполнены")
-                .timestamp(LocalDateTime.now().format(FORMATTER))
-                .build();
-    }
 
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
@@ -188,10 +176,46 @@ public class ErrorHandler {
                 .build();
     }
 
+    @ExceptionHandler(NoHandlerFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError handleNoHandlerFoundException(NoHandlerFoundException e) {
+        log.error("Endpoint not found: {}", e.getRequestURL());
+        return ApiError.builder()
+                .status("NOT_FOUND")
+                .reason("Искомый объект не был найден.")
+                .message("Endpoint not found: " + e.getRequestURL())
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
+    @ExceptionHandler(NullPointerException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleNullPointerException(NullPointerException e) {
+        log.error("Null pointer exception: {}", e.getMessage(), e);
+        return ApiError.builder()
+                .status("BAD_REQUEST")
+                .reason("Неправильно составленный запрос.")
+                .message("Отсутствуют обязательные данные в запросе")
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ApiError handleRuntimeException(RuntimeException e) {
+        log.error("Runtime exception: {}", e.getMessage(), e);
+        return ApiError.builder()
+                .status("INTERNAL_SERVER_ERROR")
+                .reason("Внутренняя ошибка сервера.")
+                .message(e.getMessage())
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiError handleException(Exception e) {
-        log.error("Внутренняя ошибка: {}", e.getMessage(), e);
+        log.error("Internal server error: {}", e.getMessage(), e);
         return ApiError.builder()
                 .status("INTERNAL_SERVER_ERROR")
                 .reason("Внутренняя ошибка сервера.")
