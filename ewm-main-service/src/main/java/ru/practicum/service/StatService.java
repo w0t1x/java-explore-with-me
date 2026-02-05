@@ -42,6 +42,7 @@ public class StatService {
             log.debug("Сохранен просмотр: {}", hit);
         } catch (Exception e) {
             log.warn("Не удалось сохранить просмотр в сервисе статистики: {}", e.getMessage());
+            // Не бросаем исключение, чтобы основная функциональность продолжала работать
         }
     }
 
@@ -57,6 +58,7 @@ public class StatService {
             ip = request.getRemoteAddr();
         }
 
+        // Если IP содержит несколько адресов (при использовании прокси), берем первый
         if (ip != null && ip.contains(",")) {
             ip = ip.split(",")[0].trim();
         }
