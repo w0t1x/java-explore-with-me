@@ -49,6 +49,14 @@ public class UserService {
     }
 
     public List<UserDto> getUsers(List<Long> ids, Integer from, Integer size) {
+        // Валидация параметров
+        if (from == null || from < 0) {
+            from = 0;
+        }
+        if (size == null || size <= 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Pageable pageable = PageRequest.of(page, size);
         List<User> users;

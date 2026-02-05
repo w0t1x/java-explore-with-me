@@ -31,13 +31,13 @@ public class PublicEventController {
             @RequestParam(required = false) Boolean paid,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime rangeStart,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime rangeEnd,
-            @RequestParam(defaultValue = "false") Boolean onlyAvailable,
+            @RequestParam(required = false, defaultValue = "false") Boolean onlyAvailable,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") @Min(0) Integer from,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) Integer size,
             HttpServletRequest request) {
 
-        log.info("GET /events with parameters: text={}, categories={}, paid={}, rangeStart={}, " +
+        log.debug("GET /events with parameters: text={}, categories={}, paid={}, rangeStart={}, " +
                         "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
                 text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 

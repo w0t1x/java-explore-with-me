@@ -71,10 +71,17 @@ public class EventService {
     }
 
     public List<EventShortDto> getEventsByUser(Long userId, Integer from, Integer size) {
+        // Валидация параметров
+        if (from == null || from < 0) {
+            from = 0;
+        }
+        if (size == null || size <= 0) {
+            size = 10;
+        }
+
         userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
-        // Исправлено: правильное создание Pageable
         int page = from / size;
         Pageable pageable = PageRequest.of(page, size, Sort.by("eventDate").descending());
         List<Event> events = eventRepository.findByInitiatorId(userId, pageable).getContent();
@@ -116,7 +123,7 @@ public class EventService {
 
         if (updateRequest.getEventDate() != null) {
             if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-                throw new ValidationException("До даты мероприятия должно быть не менее 2 часов"); // Изменено с ConflictException на ValidationException
+                throw new ValidationException("До даты мероприятия должно быть не менее 2 часов");
             }
         }
 
@@ -140,7 +147,14 @@ public class EventService {
     public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Integer from, Integer size) {
-        // Исправлено: правильное создание Pageable
+        // Валидация параметров
+        if (from == null || from < 0) {
+            from = 0;
+        }
+        if (size == null || size <= 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Sort sort = Sort.by("id").descending();
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -196,14 +210,20 @@ public class EventService {
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
                                                HttpServletRequest request) {
-        // Исправлено: правильное создание Pageable с учетом сортировки
+        // Валидация параметров
+        if (from == null || from < 0) {
+            from = 0;
+        }
+        if (size == null || size <= 0) {
+            size = 10;
+        }
+
         int page = from / size;
         Pageable pageable;
 
         if ("VIEWS".equals(sort)) {
             pageable = PageRequest.of(page, size, Sort.by("views").descending());
         } else {
-            // Сортировка по дате события по умолчанию
             pageable = PageRequest.of(page, size, Sort.by("eventDate").ascending());
         }
 
@@ -327,16 +347,28 @@ public class EventService {
                 .collect(Collectors.toList());
 
         LocalDateTime start = LocalDateTime.now().minusYears(1);
-        LocalDateTime end = LocalDateTime.now().plusSeconds(1); // Добавляем секунду для включения текущего момента
+        LocalDateTime end = LocalDateTime.now();
 
         try {
-            // Исправлено: unique=false для подсчета всех просмотров
             List<ViewStats> stats = statsClient.getStats(start, end, uris, false);
 
+            if (stats == null) {
+                return Collections.emptyMap();
+            }
+
             return stats.stream()
+                    .filter(stat -> stat.getUri() != null && stat.getUri().startsWith("/events/"))
                     .collect(Collectors.toMap(
-                            stat -> Long.parseLong(stat.getUri().substring("/events/".length())),
-                            ViewStats::getHits
+                            stat -> {
+                                try {
+                                    String idStr = stat.getUri().substring("/events/".length());
+                                    return Long.parseLong(idStr);
+                                } catch (NumberFormatException e) {
+                                    return -1L;
+                                }
+                            },
+                            ViewStats::getHits,
+                            (existing, replacement) -> existing
                     ));
         } catch (Exception e) {
             log.error("Ошибка при получении статистики из сервиса статистики: {}", e.getMessage());
@@ -347,10 +379,9 @@ public class EventService {
     private List<ViewStats> getStatsForEvent(Event event) {
         String uri = "/events/" + event.getId();
         LocalDateTime start = LocalDateTime.now().minusYears(1);
-        LocalDateTime end = LocalDateTime.now().plusSeconds(1); // Добавляем секунду для включения текущего момента
+        LocalDateTime end = LocalDateTime.now();
 
         try {
-            // Исправлено: unique=false для подсчета всех просмотров
             return statsClient.getStats(start, end, List.of(uri), false);
         } catch (Exception e) {
             log.error("Ошибка при получении статистики по событию {}: {}", event.getId(), e.getMessage());

@@ -126,7 +126,6 @@ public class ErrorHandler {
                 .build();
     }
 
-
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ApiError handleDataIntegrityViolation(DataIntegrityViolationException e) {
@@ -135,6 +134,32 @@ public class ErrorHandler {
                 .status("CONFLICT")
                 .reason("Было нарушено ограничение целостности.")
                 .message(e.getMostSpecificCause().getMessage())
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
+    // Добавляем обработку ArithmeticException (деление на ноль)
+    @ExceptionHandler(ArithmeticException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleArithmeticException(ArithmeticException e) {
+        log.error("Арифметическая ошибка: {}", e.getMessage());
+        return ApiError.builder()
+                .status("BAD_REQUEST")
+                .reason("Неправильно составленный запрос.")
+                .message("Некорректные параметры пагинации")
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
+
+    // Добавляем обработку IllegalArgumentException
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleIllegalArgumentException(IllegalArgumentException e) {
+        log.error("Некорректный аргумент: {}", e.getMessage());
+        return ApiError.builder()
+                .status("BAD_REQUEST")
+                .reason("Неправильно составленный запрос.")
+                .message(e.getMessage())
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }
