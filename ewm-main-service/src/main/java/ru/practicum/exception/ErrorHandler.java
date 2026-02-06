@@ -221,4 +221,16 @@ public class ErrorHandler {
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }
+
+    @ExceptionHandler(ValidationException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleValidationException(ValidationException e) {
+        log.error("Ошибка валидации: {}", e.getMessage());
+        return ApiError.builder()
+                .status("BAD_REQUEST")
+                .reason("Неправильно составленный запрос.")
+                .message(e.getMessage())
+                .timestamp(LocalDateTime.now().format(FORMATTER))
+                .build();
+    }
 }
