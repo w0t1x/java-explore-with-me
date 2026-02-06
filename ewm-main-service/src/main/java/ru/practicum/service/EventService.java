@@ -235,74 +235,63 @@ public class EventService {
                         "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
                 text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 
-        // 1. Сохраняем статистику
         try {
+            // 1. Сохраняем статистику
             statService.saveHit(request);
-        } catch (Exception e) {
-            log.warn("Ошибка при сохранении статистики: {}", e.getMessage());
-        }
 
-        // 2. Нормализация параметров
-        final int finalFrom = (from == null || from < 0) ? 0 : from;
-        final int finalSize = (size == null || size <= 0) ? 10 : size;
+            // 2. Нормализация параметров
+            if (from == null || from < 0) {
+                from = 0;
+            }
+            if (size == null || size <= 0) {
+                size = 10;
+            }
 
-        // Проверяем деление на ноль
-        if (finalSize == 0) {
-            return Collections.emptyList();
-        }
+            // Проверка деления на ноль
+            if (size == 0) {
+                return Collections.emptyList();
+            }
 
-        // Обработка текста
-        final String finalText = (text == null || text.trim().isEmpty()) ? null : text.trim();
+            // Обработка текста
+            String finalText = (text == null || text.trim().isEmpty()) ? null : text.trim();
 
-        // Обработка категорий
-        final List<Long> finalCategories;
-        if (categories == null || categories.isEmpty()) {
-            finalCategories = null;
-        } else {
-            finalCategories = categories;
-        }
+            // Обработка категорий
+            List<Long> finalCategories = (categories == null || categories.isEmpty()) ? null : categories;
 
-        // Обработка дат
-        LocalDateTime finalRangeStart = rangeStart;
-        LocalDateTime finalRangeEnd = rangeEnd;
+            // Обработка дат
+            LocalDateTime finalRangeStart = rangeStart;
+            LocalDateTime finalRangeEnd = rangeEnd;
 
-        // Если обе даты null, показываем будущие события
-        if (finalRangeStart == null && finalRangeEnd == null) {
-            finalRangeStart = LocalDateTime.now();
-        }
+            if (finalRangeStart == null && finalRangeEnd == null) {
+                finalRangeStart = LocalDateTime.now();
+            }
 
-        // Проверка диапазона дат
-        if (finalRangeStart != null && finalRangeEnd != null && finalRangeStart.isAfter(finalRangeEnd)) {
-            throw new ValidationException("Начальная дата не может быть позже конечной");
-        }
+            // Проверка диапазона дат - если есть ошибка, выбрасываем ValidationException
+            if (finalRangeStart != null && finalRangeEnd != null && finalRangeStart.isAfter(finalRangeEnd)) {
+                throw new ValidationException("Начальная дата не может быть позже конечной");
+            }
 
-        // Обработка onlyAvailable
-        final boolean finalOnlyAvailable = (onlyAvailable == null) ? false : onlyAvailable;
+            // Обработка onlyAvailable
+            boolean finalOnlyAvailable = (onlyAvailable == null) ? false : onlyAvailable;
 
-        // Обработка сортировки
-        final String finalSort;
-        if (sort == null || sort.isEmpty()) {
-            finalSort = null;
-        } else if (sort.equals("EVENT_DATE") || sort.equals("VIEWS")) {
-            finalSort = sort;
-        } else {
-            // Некорректное значение - игнорируем
-            finalSort = null;
-        }
+            // Обработка сортировки
+            String finalSort = sort;
+            if (sort != null && !sort.isEmpty()) {
+                if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
+                    throw new ValidationException("Некорректный параметр сортировки");
+                }
+            }
 
-        // 3. Выполнение запроса
-        try {
-            int page = finalFrom / finalSize;
+            // 3. Выполнение запроса
+            int page = from / size;
             Pageable pageable;
 
             if ("VIEWS".equals(finalSort)) {
-                pageable = PageRequest.of(page, finalSize);
+                pageable = PageRequest.of(page, size);
             } else {
-                // По умолчанию или при EVENT_DATE сортируем по дате
-                pageable = PageRequest.of(page, finalSize, Sort.by("eventDate").ascending());
+                pageable = PageRequest.of(page, size, Sort.by("eventDate").ascending());
             }
 
-            // Запрос к БД
             Page<Event> eventPage = eventRepository.findEventsPublic(
                     finalText, finalCategories, paid, finalRangeStart,
                     finalRangeEnd, finalOnlyAvailable, pageable);
@@ -313,16 +302,10 @@ public class EventService {
 
             List<Event> events = eventPage.getContent();
 
-            // Получение статистики
-            Map<Long, Long> viewsMap;
-            try {
-                viewsMap = getViewsForEvents(events);
-            } catch (Exception e) {
-                log.warn("Не удалось получить статистику: {}", e.getMessage());
-                viewsMap = Collections.emptyMap();
-            }
+            // Получение статистики просмотров
+            Map<Long, Long> viewsMap = getViewsForEvents(events);
 
-            // Установка просмотров и маппинг
+            // Создание результата
             List<EventShortDto> result = new ArrayList<>();
             for (Event event : events) {
                 try {
@@ -346,10 +329,11 @@ public class EventService {
             return result;
 
         } catch (ValidationException e) {
-            throw e; // Пробрасываем ValidationException
+            // Пробрасываем ValidationException для обработки в ErrorHandler (400 ошибка)
+            throw e;
         } catch (Exception e) {
-            log.error("Внутренняя ошибка при получении событий: {}", e.getMessage(), e);
-            // В случае любой другой ошибки возвращаем пустой список
+            // Все остальные исключения логируем и возвращаем пустой список
+            log.error("Ошибка при получении событий: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -561,23 +545,22 @@ public class EventService {
     }
 
     private Map<Long, Long> getViewsForEvents(List<Event> events) {
-        try {
-            if (events == null || events.isEmpty()) {
-                return new HashMap<>();
-            }
+        if (events == null || events.isEmpty()) {
+            return Collections.emptyMap();
+        }
 
-            List<String> uris = new ArrayList<>();
-            for (Event event : events) {
-                uris.add("/events/" + event.getId());
-            }
+        try {
+            List<String> uris = events.stream()
+                    .map(event -> "/events/" + event.getId())
+                    .collect(Collectors.toList());
 
             LocalDateTime start = LocalDateTime.now().minusYears(1);
             LocalDateTime end = LocalDateTime.now();
 
             List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
 
-            if (stats == null || stats.isEmpty()) {
-                return new HashMap<>();
+            if (stats == null) {
+                return Collections.emptyMap();
             }
 
             Map<Long, Long> viewsMap = new HashMap<>();
@@ -586,7 +569,6 @@ public class EventService {
                     String uri = stat.getUri();
                     if (uri != null && uri.startsWith("/events/")) {
                         String idStr = uri.substring("/events/".length());
-                        // Убираем параметры запроса, если есть
                         if (idStr.contains("?")) {
                             idStr = idStr.substring(0, idStr.indexOf('?'));
                         }
@@ -600,8 +582,8 @@ public class EventService {
 
             return viewsMap;
         } catch (Exception e) {
-            log.warn("Ошибка при получении статистики: {}", e.getMessage());
-            return new HashMap<>();
+            log.warn("Ошибка при получении статистики просмотров: {}", e.getMessage());
+            return Collections.emptyMap();
         }
     }
 
