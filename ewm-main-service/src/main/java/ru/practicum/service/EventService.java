@@ -234,62 +234,186 @@ public class EventService {
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
                                                HttpServletRequest request) {
-        validatePaginationParams(from, size);
-
-        // Сохраняем хит статистики в начале
-        statService.saveHit(request);
-
-        // Обрабатываем параметры
-        List<Long> filteredCategories = (categories == null || categories.isEmpty()) ? null : categories;
-        Boolean filteredPaid = paid;
-        LocalDateTime filteredRangeStart = rangeStart;
-        LocalDateTime filteredRangeEnd = rangeEnd;
-        Boolean filteredOnlyAvailable = onlyAvailable != null ? onlyAvailable : false;
-
-        // Если диапазон дат не указан, показываем будущие события
-        if (filteredRangeStart == null && filteredRangeEnd == null) {
-            filteredRangeStart = LocalDateTime.now();
-        }
-
-        int page = from / size;
-        Pageable pageable = createPageableForPublicEvents(sort, page, size);
-
         try {
-            Page<Event> eventPage = eventRepository.findEventsPublic(
-                    text, filteredCategories, filteredPaid, filteredRangeStart,
-                    filteredRangeEnd, filteredOnlyAvailable, pageable);
+            log.debug("Начало обработки публичного запроса событий с параметрами: text={}, categories={}, paid={}, " +
+                            "rangeStart={}, rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
+                    text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 
-            if (eventPage == null || eventPage.isEmpty()) {
+            try {
+                statService.saveHit(request);
+            } catch (Exception e) {
+                log.warn("Ошибка при сохранении статистики, но продолжаем обработку: {}", e.getMessage());
+            }
+
+            final Integer finalFrom;
+            final Integer finalSize;
+
+            if (from == null || from < 0) {
+                finalFrom = 0;
+            } else {
+                finalFrom = from;
+            }
+
+            if (size == null || size <= 0) {
+                finalSize = 10;
+            } else {
+                finalSize = size;
+            }
+
+            if (finalSize == 0) {
+                throw new ValidationException("Параметр size должен быть больше 0");
+            }
+
+            final List<Long> finalCategories;
+            if (categories != null && categories.isEmpty()) {
+                finalCategories = null;
+            } else {
+                finalCategories = categories;
+            }
+
+            final String finalText;
+            if (text != null && !text.trim().isEmpty()) {
+                String trimmedText = text.trim();
+                if (trimmedText.length() < 1 || trimmedText.length() > 7000) {
+                    throw new ValidationException("Текст поиска должен быть от 1 до 7000 символов");
+                }
+                finalText = trimmedText;
+            } else {
+                finalText = null;
+            }
+
+            final LocalDateTime finalRangeStart;
+            final LocalDateTime finalRangeEnd;
+
+            if (rangeStart == null && rangeEnd == null) {
+                finalRangeStart = LocalDateTime.now();
+                finalRangeEnd = null;
+            } else {
+                finalRangeStart = rangeStart;
+                finalRangeEnd = rangeEnd;
+            }
+
+            if (finalRangeStart != null && finalRangeEnd != null
+                    && finalRangeStart.isAfter(finalRangeEnd)) {
+                throw new ValidationException("Начальная дата не может быть позже конечной");
+            }
+
+            final Boolean finalOnlyAvailable = onlyAvailable != null ? onlyAvailable : false;
+
+            final String finalSort;
+            if (sort != null && !sort.isEmpty()) {
+                if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
+                    throw new ValidationException("Некорректный параметр сортировки. Допустимые значения: EVENT_DATE, VIEWS");
+                }
+                finalSort = sort;
+            } else {
+                finalSort = null;
+            }
+
+            // 5. Создание пагинации
+            final int page = finalFrom / finalSize;
+            final Pageable pageable;
+
+            if (finalSort == null || finalSort.equals("EVENT_DATE")) {
+                // Сортировка по дате события по возрастанию (ближайшие события первыми)
+                pageable = PageRequest.of(page, finalSize, Sort.by("eventDate").ascending());
+            } else {
+                // Для сортировки по просмотрам сначала получаем без сортировки, затем сортируем в памяти
+                pageable = PageRequest.of(page, finalSize);
+            }
+
+            log.debug("Параметры после нормализации: text='{}', categories={}, paid={}, rangeStart={}, " +
+                            "rangeEnd={}, onlyAvailable={}, sort={}, page={}, pageSize={}",
+                    finalText, finalCategories, paid, finalRangeStart, finalRangeEnd,
+                    finalOnlyAvailable, finalSort, page, finalSize);
+
+            final Page<Event> eventPage;
+            try {
+                eventPage = eventRepository.findEventsPublic(
+                        finalText, finalCategories, paid, finalRangeStart,
+                        finalRangeEnd, finalOnlyAvailable, pageable);
+
+                if (eventPage == null) {
+                    log.warn("Результат запроса событий вернул null, возвращаем пустой список");
+                    return Collections.emptyList();
+                }
+            } catch (Exception e) {
+                log.error("Ошибка при запросе событий из базы данных: {}", e.getMessage(), e);
+                throw new ValidationException("Ошибка при выполнении запроса событий");
+            }
+
+            final List<Event> events = eventPage.getContent();
+
+            if (events.isEmpty()) {
+                log.debug("События не найдены по заданным критериям");
                 return Collections.emptyList();
             }
 
-            List<Event> events = eventPage.getContent();
+            log.debug("Найдено {} событий", events.size());
 
-            // Получаем просмотры для всех событий
-            Map<Long, Long> views = getViewsForEvents(events);
-            events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
-
-            // Если нужна сортировка по просмотрам, делаем её в памяти
-            if ("VIEWS".equals(sort)) {
-                events.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
+            final Map<Long, Long> viewsMap;
+            try {
+                viewsMap = getViewsForEvents(events);
+            } catch (Exception e) {
+                log.warn("Не удалось получить статистику просмотров: {}", e.getMessage());
+                return events.stream()
+                        .map(event -> {
+                            try {
+                                // Без просмотров создаем DTO
+                                return eventMapper.toEventShortDto(event);
+                            } catch (Exception ex) {
+                                log.error("Ошибка при маппинге события с id={}: {}", event.getId(), ex.getMessage());
+                                return null;
+                            }
+                        })
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
             }
 
-            // Маппим и фильтруем null
-            List<EventShortDto> result = events.stream()
-                    .map(eventMapper::toEventShortDto)
+            events.forEach(event -> {
+                Long views = viewsMap.get(event.getId());
+                event.setViews(views != null ? views : 0L);
+            });
+
+            final List<Event> sortedEvents;
+            if (finalSort != null && finalSort.equals("VIEWS")) {
+                sortedEvents = new ArrayList<>(events);
+                sortedEvents.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
+            } else {
+                sortedEvents = events;
+            }
+
+            final List<EventShortDto> result = sortedEvents.stream()
+                    .map(event -> {
+                        try {
+                            return eventMapper.toEventShortDto(event);
+                        } catch (Exception e) {
+                            log.error("Ошибка при маппинге события с id={}: {}", event.getId(), e.getMessage());
+                            return null;
+                        }
+                    })
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
+            log.debug("Успешно обработан запрос событий, возвращено {} DTO", result.size());
             return result;
 
+        } catch (ValidationException e) {
+            log.warn("Ошибка валидации при запросе событий: {}", e.getMessage());
+            throw e;
+        } catch (NotFoundException e) {
+            log.warn("Объект не найден при запросе событий: {}", e.getMessage());
+            throw e;
+        } catch (ConflictException e) {
+            log.warn("Конфликт при запросе событий: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            log.error("Ошибка при получении публичных событий: {}", e.getMessage(), e);
-            throw new RuntimeException("Ошибка при обработке запроса событий");
+            log.error("Непредвиденная ошибка при обработке публичного запроса событий: {}", e.getMessage(), e);
+            throw new RuntimeException("Внутренняя ошибка сервера при обработке запроса событий", e);
         }
     }
 
     public EventFullDto getEventPublic(Long eventId, HttpServletRequest request) {
-        // Сохраняем хит статистики в начале
         statService.saveHit(request);
 
         try {
@@ -411,43 +535,41 @@ public class EventService {
             return Collections.emptyMap();
         }
 
-        List<String> uris = events.stream()
-                .map(event -> "/events/" + event.getId())
-                .collect(Collectors.toList());
-
-        LocalDateTime start = LocalDateTime.now().minusYears(1);
-        LocalDateTime end = LocalDateTime.now();
-
         try {
-            List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
+            final List<String> uris = events.stream()
+                    .map(event -> "/events/" + event.getId())
+                    .collect(Collectors.toList());
 
-            if (stats == null || stats.isEmpty()) {
+            final LocalDateTime start = LocalDateTime.now().minusYears(1);
+            final LocalDateTime end = LocalDateTime.now();
+
+            final List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
+
+            if (stats == null) {
                 return Collections.emptyMap();
             }
 
-            Map<Long, Long> viewsMap = new HashMap<>();
-
+            final Map<Long, Long> viewsMap = new HashMap<>();
             for (ViewStats stat : stats) {
-                if (stat.getUri() != null && stat.getUri().startsWith("/events/")) {
-                    try {
-                        String uri = stat.getUri();
-                        // Убираем параметры запроса, если есть
-                        if (uri.contains("?")) {
-                            uri = uri.substring(0, uri.indexOf('?'));
-                        }
+                try {
+                    final String uri = stat.getUri();
+                    if (uri != null && uri.startsWith("/events/")) {
                         String idStr = uri.substring("/events/".length());
-                        Long eventId = Long.parseLong(idStr);
+                        if (idStr.contains("?")) {
+                            idStr = idStr.substring(0, idStr.indexOf('?'));
+                        }
+                        final Long eventId = Long.parseLong(idStr);
                         viewsMap.put(eventId, stat.getHits());
-                    } catch (Exception e) {
-                        log.warn("Не удалось распарсить ID события из URI: {}", stat.getUri());
                     }
+                } catch (Exception e) {
+                    log.warn("Не удалось обработать статистику для URI: {}", stat.getUri());
                 }
             }
 
             return viewsMap;
         } catch (Exception e) {
-            log.error("Ошибка при получении статистики из сервиса статистики: {}", e.getMessage());
-            return Collections.emptyMap();
+            log.error("Ошибка при получении статистики просмотров: {}", e.getMessage());
+            throw new RuntimeException("Не удалось получить статистику просмотров", e);
         }
     }
 

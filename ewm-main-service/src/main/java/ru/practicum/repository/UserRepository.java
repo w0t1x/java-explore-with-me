@@ -16,14 +16,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByEmail(String email);
 
-    // Метод 1: Используя встроенную функциональность Spring Data JPA
     Page<User> findByIdIn(List<Long> ids, Pageable pageable);
 
-    // Метод 2: Кастомный запрос с пагинацией
     @Query("SELECT u FROM User u WHERE (:ids IS NULL OR u.id IN :ids)")
     Page<User> findUsersByIds(@Param("ids") List<Long> ids, Pageable pageable);
 
-    // Метод 3: Кастомный запрос без пагинации (для сравнения)
     @Query("SELECT u FROM User u WHERE u.id IN :ids")
     List<User> findAllByIds(@Param("ids") List<Long> ids);
 }

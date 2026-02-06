@@ -37,12 +37,17 @@ public class PublicEventController {
             @RequestParam(defaultValue = "10") @Positive Integer size,
             HttpServletRequest request) {
 
-        log.debug("GET /events with parameters: text={}, categories={}, paid={}, rangeStart={}, " +
+        log.info("GET /events с параметрами: text='{}', categories={}, paid={}, rangeStart={}, " +
                         "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
                 text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 
-        return eventService.getEventsPublic(text, categories, paid, rangeStart, rangeEnd,
-                onlyAvailable, sort, from, size, request);
+        try {
+            return eventService.getEventsPublic(text, categories, paid, rangeStart, rangeEnd,
+                    onlyAvailable, sort, from, size, request);
+        } catch (Exception e) {
+            log.error("Ошибка при обработке запроса GET /events: ", e);
+            throw e;
+        }
     }
 
     @GetMapping("/{id}")
