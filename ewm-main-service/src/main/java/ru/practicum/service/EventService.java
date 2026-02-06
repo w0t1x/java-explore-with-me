@@ -74,8 +74,6 @@ public class EventService {
     }
 
     public List<EventShortDto> getEventsByUser(Long userId, Integer from, Integer size) {
-        validatePaginationParams(from, size);
-
         userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("Пользователь с id=" + userId + " не найден"));
 
@@ -163,8 +161,6 @@ public class EventService {
     public List<EventFullDto> getEventsByAdmin(List<Long> users, List<EventState> states, List<Long> categories,
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Integer from, Integer size) {
-        validatePaginationParams(from, size);
-
         // Фиксируем null для пустых списков
         List<Long> filteredUsers = (users == null || users.isEmpty()) ? null : users;
         List<EventState> filteredStates = (states == null || states.isEmpty()) ? null : states;
@@ -448,15 +444,6 @@ public class EventService {
             return PageRequest.of(page, size);
         } else {
             return PageRequest.of(page, size, Sort.by("eventDate").ascending());
-        }
-    }
-
-    private void validatePaginationParams(Integer from, Integer size) {
-        if (from == null || from < 0) {
-            from = 0;
-        }
-        if (size == null || size <= 0) {
-            size = 10;
         }
     }
 
