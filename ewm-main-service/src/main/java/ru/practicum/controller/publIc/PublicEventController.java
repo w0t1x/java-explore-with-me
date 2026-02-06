@@ -1,24 +1,26 @@
 package ru.practicum.controller.publIc;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import ru.practicum.dto.event.EventFullDto;
 import ru.practicum.dto.event.EventShortDto;
 import ru.practicum.service.EventService;
 
-import jakarta.validation.constraints.*;
-
 import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
-@RequestMapping("/events")
 @RequiredArgsConstructor
 @Slf4j
+@Validated
+@RequestMapping("/events")
 public class PublicEventController {
 
     private final EventService eventService;
@@ -37,23 +39,28 @@ public class PublicEventController {
             @RequestParam(defaultValue = "10") @Positive Integer size,
             HttpServletRequest request) {
 
-        log.info("GET /events с параметрами: text='{}', categories={}, paid={}, rangeStart={}, " +
+        if (text != null && text.trim().isEmpty()) {
+            text = null;
+        }
+
+        if (sort != null && !sort.isEmpty()) {
+            if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
+                sort = null;
+            }
+        }
+
+        log.info("GET /events получен запрос: text={}, categories={}, paid={}, rangeStart={}, " +
                         "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
                 text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
 
-        try {
-            return eventService.getEventsPublic(text, categories, paid, rangeStart, rangeEnd,
-                    onlyAvailable, sort, from, size, request);
-        } catch (Exception e) {
-            log.error("Ошибка при обработке запроса GET /events: ", e);
-            throw e;
-        }
+        return eventService.getEventsPublic(text, categories, paid, rangeStart, rangeEnd,
+                onlyAvailable, sort, from, size, request);
     }
 
     @GetMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
     public EventFullDto getEvent(@PathVariable Long id, HttpServletRequest request) {
-        log.info("GET /events/{}", id);
+        log.info("GET /events/{} получен запрос", id);
         return eventService.getEventPublic(id, request);
     }
 }

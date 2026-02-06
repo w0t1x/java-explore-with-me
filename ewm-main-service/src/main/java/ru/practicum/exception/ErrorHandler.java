@@ -97,13 +97,11 @@ public class ErrorHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e) {
-        String message = String.format("Invalid parameter: %s. Expected type: %s",
-                e.getName(), e.getRequiredType() != null ? e.getRequiredType().getSimpleName() : "unknown");
-        log.error("Type mismatch: {}", message);
+        log.error("Некорректный тип аргумента: {}", e.getMessage());
         return ApiError.builder()
                 .status("BAD_REQUEST")
-                .reason("Неправильно составленный запрос.")
-                .message(message)
+                .reason("Некорректный запрос.")
+                .message("Параметр '" + e.getName() + "' имеет некорректный тип")
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }

@@ -230,183 +230,110 @@ public class EventService {
                                                LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                Boolean onlyAvailable, String sort, Integer from, Integer size,
                                                HttpServletRequest request) {
+
+        log.debug("Публичный запрос событий: text={}, categories={}, paid={}, rangeStart={}, " +
+                        "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
+                text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
+
+        statService.saveHit(request);
+
+        if (from == null || from < 0) {
+            from = 0;
+        }
+        if (size == null || size <= 0) {
+            size = 10;
+        }
+
+
+        List<Long> filteredCategories = categories;
+        if (categories != null && categories.isEmpty()) {
+            filteredCategories = null;
+        }
+
+        String filteredText = text;
+        if (text != null && text.trim().isEmpty()) {
+            filteredText = null;
+        }
+
+        LocalDateTime filteredRangeStart = rangeStart;
+        LocalDateTime filteredRangeEnd = rangeEnd;
+
+        if (filteredRangeStart == null && filteredRangeEnd == null) {
+            filteredRangeStart = LocalDateTime.now();
+        }
+
+        String filteredSort = sort;
+        if (sort != null) {
+            if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
+                filteredSort = null;
+            }
+        }
+
         try {
-            log.debug("Начало обработки публичного запроса событий с параметрами: text={}, categories={}, paid={}, " +
-                            "rangeStart={}, rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
-                    text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
+            List<EventShortDto> result = getEventsPublicInternal(
+                    filteredText, filteredCategories, paid, filteredRangeStart,
+                    filteredRangeEnd, onlyAvailable, filteredSort, from, size);
 
-            try {
-                statService.saveHit(request);
-            } catch (Exception e) {
-                log.warn("Ошибка при сохранении статистики, но продолжаем обработку: {}", e.getMessage());
-            }
-
-            final Integer finalFrom;
-            final Integer finalSize;
-
-            if (from == null || from < 0) {
-                finalFrom = 0;
-            } else {
-                finalFrom = from;
-            }
-
-            if (size == null || size <= 0) {
-                finalSize = 10;
-            } else {
-                finalSize = size;
-            }
-
-            if (finalSize == 0) {
-                throw new ValidationException("Параметр size должен быть больше 0");
-            }
-
-            final List<Long> finalCategories;
-            if (categories != null && categories.isEmpty()) {
-                finalCategories = null;
-            } else {
-                finalCategories = categories;
-            }
-
-            final String finalText;
-            if (text != null && !text.trim().isEmpty()) {
-                String trimmedText = text.trim();
-                if (trimmedText.length() < 1 || trimmedText.length() > 7000) {
-                    throw new ValidationException("Текст поиска должен быть от 1 до 7000 символов");
-                }
-                finalText = trimmedText;
-            } else {
-                finalText = null;
-            }
-
-            final LocalDateTime finalRangeStart;
-            final LocalDateTime finalRangeEnd;
-
-            if (rangeStart == null && rangeEnd == null) {
-                finalRangeStart = LocalDateTime.now();
-                finalRangeEnd = null;
-            } else {
-                finalRangeStart = rangeStart;
-                finalRangeEnd = rangeEnd;
-            }
-
-            if (finalRangeStart != null && finalRangeEnd != null
-                    && finalRangeStart.isAfter(finalRangeEnd)) {
-                throw new ValidationException("Начальная дата не может быть позже конечной");
-            }
-
-            final Boolean finalOnlyAvailable = onlyAvailable != null ? onlyAvailable : false;
-
-            final String finalSort;
-            if (sort != null && !sort.isEmpty()) {
-                if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
-                    throw new ValidationException("Некорректный параметр сортировки. Допустимые значения: EVENT_DATE, VIEWS");
-                }
-                finalSort = sort;
-            } else {
-                finalSort = null;
-            }
-
-            // 5. Создание пагинации
-            final int page = finalFrom / finalSize;
-            final Pageable pageable;
-
-            if (finalSort == null || finalSort.equals("EVENT_DATE")) {
-                // Сортировка по дате события по возрастанию (ближайшие события первыми)
-                pageable = PageRequest.of(page, finalSize, Sort.by("eventDate").ascending());
-            } else {
-                // Для сортировки по просмотрам сначала получаем без сортировки, затем сортируем в памяти
-                pageable = PageRequest.of(page, finalSize);
-            }
-
-            log.debug("Параметры после нормализации: text='{}', categories={}, paid={}, rangeStart={}, " +
-                            "rangeEnd={}, onlyAvailable={}, sort={}, page={}, pageSize={}",
-                    finalText, finalCategories, paid, finalRangeStart, finalRangeEnd,
-                    finalOnlyAvailable, finalSort, page, finalSize);
-
-            final Page<Event> eventPage;
-            try {
-                eventPage = eventRepository.findEventsPublic(
-                        finalText, finalCategories, paid, finalRangeStart,
-                        finalRangeEnd, finalOnlyAvailable, pageable);
-
-                if (eventPage == null) {
-                    log.warn("Результат запроса событий вернул null, возвращаем пустой список");
-                    return Collections.emptyList();
-                }
-            } catch (Exception e) {
-                log.error("Ошибка при запросе событий из базы данных: {}", e.getMessage(), e);
-                throw new ValidationException("Ошибка при выполнении запроса событий");
-            }
-
-            final List<Event> events = eventPage.getContent();
-
-            if (events.isEmpty()) {
-                log.debug("События не найдены по заданным критериям");
-                return Collections.emptyList();
-            }
-
-            log.debug("Найдено {} событий", events.size());
-
-            final Map<Long, Long> viewsMap;
-            try {
-                viewsMap = getViewsForEvents(events);
-            } catch (Exception e) {
-                log.warn("Не удалось получить статистику просмотров: {}", e.getMessage());
-                return events.stream()
-                        .map(event -> {
-                            try {
-                                // Без просмотров создаем DTO
-                                return eventMapper.toEventShortDto(event);
-                            } catch (Exception ex) {
-                                log.error("Ошибка при маппинге события с id={}: {}", event.getId(), ex.getMessage());
-                                return null;
-                            }
-                        })
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toList());
-            }
-
-            events.forEach(event -> {
-                Long views = viewsMap.get(event.getId());
-                event.setViews(views != null ? views : 0L);
-            });
-
-            final List<Event> sortedEvents;
-            if (finalSort != null && finalSort.equals("VIEWS")) {
-                sortedEvents = new ArrayList<>(events);
-                sortedEvents.sort((e1, e2) -> Long.compare(e2.getViews(), e1.getViews()));
-            } else {
-                sortedEvents = events;
-            }
-
-            final List<EventShortDto> result = sortedEvents.stream()
-                    .map(event -> {
-                        try {
-                            return eventMapper.toEventShortDto(event);
-                        } catch (Exception e) {
-                            log.error("Ошибка при маппинге события с id={}: {}", event.getId(), e.getMessage());
-                            return null;
-                        }
-                    })
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList());
-
-            log.debug("Успешно обработан запрос событий, возвращено {} DTO", result.size());
+            log.debug("Успешно возвращено {} событий", result.size());
             return result;
 
-        } catch (ValidationException e) {
-            log.warn("Ошибка валидации при запросе событий: {}", e.getMessage());
-            throw e;
-        } catch (NotFoundException e) {
-            log.warn("Объект не найден при запросе событий: {}", e.getMessage());
-            throw e;
-        } catch (ConflictException e) {
-            log.warn("Конфликт при запросе событий: {}", e.getMessage());
-            throw e;
         } catch (Exception e) {
-            log.error("Непредвиденная ошибка при обработке публичного запроса событий: {}", e.getMessage(), e);
-            throw new RuntimeException("Внутренняя ошибка сервера при обработке запроса событий", e);
+            log.error("Ошибка при получении публичных событий: {}", e.getMessage(), e);
+            throw new RuntimeException("Ошибка при получении событий: " + e.getMessage());
         }
+    }
+
+    private List<EventShortDto> getEventsPublicInternal(String text, List<Long> categories, Boolean paid,
+                                                        LocalDateTime rangeStart, LocalDateTime rangeEnd,
+                                                        Boolean onlyAvailable, String sort, Integer from, Integer size) {
+
+        // 1. Создание пагинации
+        int page = from / size;
+        Pageable pageable;
+
+        if ("VIEWS".equals(sort)) {
+            pageable = PageRequest.of(page, size);
+        } else {
+            // По умолчанию сортируем по дате события
+            pageable = PageRequest.of(page, size, Sort.by("eventDate").ascending());
+        }
+
+        // 2. Запрос к базе данных
+        Page<Event> eventPage = eventRepository.findEventsPublic(
+                text, categories, paid, rangeStart, rangeEnd, onlyAvailable, pageable);
+
+        if (eventPage == null || eventPage.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Event> events = eventPage.getContent();
+
+        // 3. Получение статистики просмотров
+        Map<Long, Long> views = getViewsForEvents(events);
+
+        // 4. Маппинг событий
+        List<EventShortDto> result = new ArrayList<>();
+        for (Event event : events) {
+            try {
+                // Устанавливаем количество просмотров
+                Long eventViews = views.get(event.getId());
+                event.setViews(eventViews != null ? eventViews : 0L);
+
+                EventShortDto dto = eventMapper.toEventShortDto(event);
+                if (dto != null) {
+                    result.add(dto);
+                }
+            } catch (Exception e) {
+                log.warn("Ошибка при маппинге события {}: {}", event.getId(), e.getMessage());
+            }
+        }
+
+        // 5. Сортировка по просмотрам, если нужно
+        if ("VIEWS".equals(sort)) {
+            result.sort((dto1, dto2) -> Long.compare(dto2.getViews(), dto1.getViews()));
+        }
+
+        return result;
     }
 
     public EventFullDto getEventPublic(Long eventId, HttpServletRequest request) {
