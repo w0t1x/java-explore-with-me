@@ -97,11 +97,13 @@ public class ErrorHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiError handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException e) {
-        log.error("Некорректный тип аргумента: {}", e.getMessage());
+        String message = String.format("Invalid parameter: %s. Expected type: %s",
+                e.getName(), e.getRequiredType() != null ? e.getRequiredType().getSimpleName() : "unknown");
+        log.error("Type mismatch: {}", message);
         return ApiError.builder()
                 .status("BAD_REQUEST")
-                .reason("Некорректный запрос.")
-                .message("Параметр '" + e.getName() + "' имеет некорректный тип")
+                .reason("Неправильно составленный запрос.")
+                .message(message)
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
     }
@@ -217,18 +219,6 @@ public class ErrorHandler {
         return ApiError.builder()
                 .status("INTERNAL_SERVER_ERROR")
                 .reason("Внутренняя ошибка сервера.")
-                .message(e.getMessage())
-                .timestamp(LocalDateTime.now().format(FORMATTER))
-                .build();
-    }
-
-    @ExceptionHandler(ValidationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiError handleValidationException(ValidationException e) {
-        log.error("Ошибка валидации: {}", e.getMessage());
-        return ApiError.builder()
-                .status("BAD_REQUEST")
-                .reason("Неправильно составленный запрос.")
                 .message(e.getMessage())
                 .timestamp(LocalDateTime.now().format(FORMATTER))
                 .build();
