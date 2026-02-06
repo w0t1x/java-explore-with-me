@@ -77,23 +77,24 @@ public class EventMapper {
 
     public EventShortDto toEventShortDto(Event event) {
         if (event == null) {
-            throw new IllegalArgumentException("Event не может быть null");
+            return null;
         }
 
-        EventShortDto dto = EventShortDto.builder()
-                .id(event.getId())
-                .annotation(event.getAnnotation() != null ? event.getAnnotation() : "")
-                .category(event.getCategory() != null ? categoryMapper.toCategoryDto(event.getCategory()) : null)
-                .confirmedRequests(event.getConfirmedRequests() != null ? event.getConfirmedRequests() : 0)
-                .eventDate(event.getEventDate() != null ? event.getEventDate() : LocalDateTime.now().plusDays(1))
-                .initiator(event.getInitiator() != null ? userMapper.toUserShortDto(event.getInitiator()) : null)
-                .paid(event.getPaid() != null ? event.getPaid() : false)
-                .title(event.getTitle() != null ? event.getTitle() : "")
-                .views(event.getViews() != null ? event.getViews() : 0L)
-                .build();
-
-        validateEventShortDto(dto);
-        return dto;
+        try {
+            return EventShortDto.builder()
+                    .id(event.getId())
+                    .annotation(event.getAnnotation() != null ? event.getAnnotation() : "")
+                    .category(event.getCategory() != null ? categoryMapper.toCategoryDto(event.getCategory()) : null)
+                    .confirmedRequests(event.getConfirmedRequests() != null ? event.getConfirmedRequests() : 0)
+                    .eventDate(event.getEventDate() != null ? event.getEventDate() : LocalDateTime.now())
+                    .initiator(event.getInitiator() != null ? userMapper.toUserShortDto(event.getInitiator()) : null)
+                    .paid(event.getPaid() != null ? event.getPaid() : false)
+                    .title(event.getTitle() != null ? event.getTitle() : "")
+                    .views(event.getViews() != null ? event.getViews() : 0L)
+                    .build();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void validateEventFullDto(EventFullDto dto) {

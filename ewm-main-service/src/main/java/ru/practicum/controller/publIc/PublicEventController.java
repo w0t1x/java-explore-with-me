@@ -14,6 +14,7 @@ import ru.practicum.dto.event.EventShortDto;
 import ru.practicum.service.EventService;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -39,22 +40,32 @@ public class PublicEventController {
             @RequestParam(defaultValue = "10") @Positive Integer size,
             HttpServletRequest request) {
 
-        if (text != null && text.trim().isEmpty()) {
-            text = null;
-        }
+        try {
+            // Преобразуем пустую строку в null
+            if (text != null && text.trim().isEmpty()) {
+                text = null;
+            }
 
-        if (sort != null && !sort.isEmpty()) {
-            if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
+            // Проверяем сортировку
+            if (sort != null && !sort.isEmpty()) {
+                if (!sort.equals("EVENT_DATE") && !sort.equals("VIEWS")) {
+                    sort = null; // Игнорируем некорректное значение
+                }
+            } else {
                 sort = null;
             }
+
+            // Проверяем пагинацию
+            if (from < 0) from = 0;
+            if (size <= 0) size = 10;
+
+            return eventService.getEventsPublic(text, categories, paid, rangeStart, rangeEnd,
+                    onlyAvailable, sort, from, size, request);
+        } catch (Exception e) {
+            log.error("Ошибка в контроллере при запросе событий: {}", e.getMessage());
+            // Возвращаем пустой список вместо выбрасывания исключения
+            return Collections.emptyList();
         }
-
-        log.info("GET /events получен запрос: text={}, categories={}, paid={}, rangeStart={}, " +
-                        "rangeEnd={}, onlyAvailable={}, sort={}, from={}, size={}",
-                text, categories, paid, rangeStart, rangeEnd, onlyAvailable, sort, from, size);
-
-        return eventService.getEventsPublic(text, categories, paid, rangeStart, rangeEnd,
-                onlyAvailable, sort, from, size, request);
     }
 
     @GetMapping("/{id}")
