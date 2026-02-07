@@ -46,6 +46,7 @@ public class EventMapper {
             throw new IllegalArgumentException("Event не может быть null");
         }
 
+        // Создаем DTO с правильной логикой для publishedOn
         EventFullDto dto = EventFullDto.builder()
                 .id(event.getId())
                 .annotation(event.getAnnotation() != null ? event.getAnnotation() : "")
@@ -63,16 +64,34 @@ public class EventMapper {
                         LocationDto.builder().lat(0.0).lon(0.0).build())
                 .paid(event.getPaid() != null ? event.getPaid() : false)
                 .participantLimit(event.getParticipantLimit() != null ? event.getParticipantLimit() : 0)
-                .publishedOn(event.getPublishedOn())
+                .publishedOn(event.getState() == EventState.PUBLISHED ?
+                        (event.getPublishedOn() != null ? event.getPublishedOn() : event.getCreatedOn())
+                        : null)
                 .requestModeration(event.getRequestModeration() != null ? event.getRequestModeration() : true)
                 .state(event.getState() != null ? event.getState() : EventState.PENDING)
                 .title(event.getTitle() != null ? event.getTitle() : "")
                 .views(event.getViews() != null ? event.getViews() : 0L)
                 .build();
 
-        // Проверяем, что все обязательные поля заполнены
         validateEventFullDto(dto);
         return dto;
+    }
+
+    private void validateEventFullDto(EventFullDto dto) {
+        if (dto.getId() == null) throw new IllegalArgumentException("ID события не может быть null");
+        if (dto.getAnnotation() == null) throw new IllegalArgumentException("Annotation не может быть null");
+        if (dto.getCategory() == null) throw new IllegalArgumentException("Category не может быть null");
+        if (dto.getEventDate() == null) throw new IllegalArgumentException("EventDate не может быть null");
+        if (dto.getInitiator() == null) throw new IllegalArgumentException("Initiator не может быть null");
+        if (dto.getLocation() == null) throw new IllegalArgumentException("Location не может быть null");
+        if (dto.getTitle() == null) throw new IllegalArgumentException("Title не может быть null");
+        if (dto.getCreatedOn() == null) throw new IllegalArgumentException("CreatedOn не может быть null");
+        if (dto.getState() == null) throw new IllegalArgumentException("State не может быть null");
+        if (dto.getPaid() == null) throw new IllegalArgumentException("Paid не может быть null");
+        if (dto.getParticipantLimit() == null) throw new IllegalArgumentException("ParticipantLimit не может быть null");
+        if (dto.getRequestModeration() == null) throw new IllegalArgumentException("RequestModeration не может быть null");
+        if (dto.getConfirmedRequests() == null) throw new IllegalArgumentException("ConfirmedRequests не может быть null");
+        if (dto.getViews() == null) throw new IllegalArgumentException("Views не может быть null");
     }
 
     public EventShortDto toEventShortDto(Event event) {
@@ -95,16 +114,6 @@ public class EventMapper {
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private void validateEventFullDto(EventFullDto dto) {
-        if (dto.getId() == null) throw new IllegalArgumentException("ID события не может быть null");
-        if (dto.getAnnotation() == null) throw new IllegalArgumentException("Annotation не может быть null");
-        if (dto.getCategory() == null) throw new IllegalArgumentException("Category не может быть null");
-        if (dto.getEventDate() == null) throw new IllegalArgumentException("EventDate не может быть null");
-        if (dto.getInitiator() == null) throw new IllegalArgumentException("Initiator не может быть null");
-        if (dto.getLocation() == null) throw new IllegalArgumentException("Location не может быть null");
-        if (dto.getTitle() == null) throw new IllegalArgumentException("Title не может быть null");
     }
 
     private void validateEventShortDto(EventShortDto dto) {

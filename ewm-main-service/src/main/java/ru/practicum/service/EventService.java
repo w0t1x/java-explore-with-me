@@ -86,13 +86,19 @@ public class EventService {
         }
 
         List<Event> events = eventPage.getContent();
-        Map<Long, Long> views = getViewsForEvents(events);
-        events.forEach(event -> {
-            event.setViews(views.getOrDefault(event.getId(), 0L));
-        });
 
+        // Получаем статистику просмотров
+        Map<Long, Long> views = getViewsForEvents(events);
+
+        // Маппим события в DTO с актуальными просмотрами
         return events.stream()
-                .map(eventMapper::toEventShortDto)
+                .map(event -> {
+                    EventShortDto dto = eventMapper.toEventShortDto(event);
+                    if (dto != null) {
+                        dto.setViews(views.getOrDefault(event.getId(), 0L));
+                    }
+                    return dto;
+                })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
@@ -104,13 +110,18 @@ public class EventService {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
+        // Получаем статистику просмотров
         List<ViewStats> stats = getStatsForEvent(event);
-        event.setViews(stats.isEmpty() ? 0L : stats.get(0).getHits());
+        Long currentViews = stats.isEmpty() ? 0L : stats.get(0).getHits();
 
         EventFullDto result = eventMapper.toEventFullDto(event);
         if (result == null) {
             throw new RuntimeException("Ошибка при маппинге события");
         }
+
+        // Устанавливаем актуальное количество просмотров
+        result.setViews(currentViews);
+
         return result;
     }
 
@@ -178,13 +189,67 @@ public class EventService {
         }
 
         List<Event> events = eventPage.getContent();
-        Map<Long, Long> views = getViewsForEvents(events);
-        events.forEach(event -> event.setViews(views.getOrDefault(event.getId(), 0L)));
 
+        // Получаем статистику просмотров для всех событий
+        Map<Long, Long> views = getViewsForEvents(events);
+
+        // Маппим события в DTO с актуальными просмотрами
         return events.stream()
-                .map(eventMapper::toEventFullDto)
+                .map(event -> {
+                    EventFullDto dto = eventMapper.toEventFullDto(event);
+                    // Устанавливаем актуальное количество просмотров
+                    if (dto != null) {
+                        dto.setViews(views.getOrDefault(event.getId(), 0L));
+                    }
+                    return dto;
+                })
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
+    }
+
+    private Map<Long, Long> getViewsForEvents(List<Event> events) {
+        try {
+            if (events == null || events.isEmpty()) {
+                return new HashMap<>();
+            }
+
+            List<String> uris = new ArrayList<>();
+            for (Event event : events) {
+                uris.add("/events/" + event.getId());
+            }
+
+            LocalDateTime start = LocalDateTime.now().minusYears(1);
+            LocalDateTime end = LocalDateTime.now();
+
+            List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
+
+            if (stats == null || stats.isEmpty()) {
+                return new HashMap<>();
+            }
+
+            Map<Long, Long> viewsMap = new HashMap<>();
+            for (ViewStats stat : stats) {
+                try {
+                    String uri = stat.getUri();
+                    if (uri != null && uri.startsWith("/events/")) {
+                        String idStr = uri.substring("/events/".length());
+                        // Убираем параметры запроса, если есть
+                        if (idStr.contains("?")) {
+                            idStr = idStr.substring(0, idStr.indexOf('?'));
+                        }
+                        Long eventId = Long.parseLong(idStr);
+                        viewsMap.put(eventId, stat.getHits());
+                    }
+                } catch (Exception e) {
+                    log.debug("Не удалось обработать статистику для URI: {}", stat.getUri());
+                }
+            }
+
+            return viewsMap;
+        } catch (Exception e) {
+            log.warn("Ошибка при получении статистики: {}", e.getMessage());
+            return new HashMap<>();
+        }
     }
 
     @Transactional
@@ -192,9 +257,11 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Событие с id=" + eventId + " не найдено"));
 
+        // Исправленная валидация: дата должна быть минимум через 1 час от текущего момента
         if (updateRequest.getEventDate() != null) {
-            if (updateRequest.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
-                throw new ConflictException("До даты мероприятия должно быть не менее 1 часа");
+            LocalDateTime now = LocalDateTime.now();
+            if (updateRequest.getEventDate().isBefore(now.plusHours(1))) {
+                throw new ConflictException("Дата события должна быть не менее чем через 1 час от текущего момента");
             }
         }
 
@@ -223,6 +290,10 @@ public class EventService {
         if (result == null) {
             throw new RuntimeException("Ошибка при маппинге события администратором");
         }
+
+        List<ViewStats> stats = getStatsForEvent(updatedEvent);
+        result.setViews(stats.isEmpty() ? 0L : stats.get(0).getHits());
+
         return result;
     }
 
@@ -233,14 +304,14 @@ public class EventService {
 
         log.info("Начало обработки публичного запроса событий");
 
-        // 1. Сохраняем статистику (безопасно)
+        // Сохраняем статистику ДО обработки запроса
         try {
             statService.saveHit(request);
         } catch (Exception e) {
             log.warn("Не удалось сохранить статистику: {}", e.getMessage());
         }
 
-        // 2. Базовая валидация параметров
+        // Безопасная обработка параметров
         try {
             return getEventsPublicInternal(text, categories, paid, rangeStart, rangeEnd,
                     onlyAvailable, sort, from, size);
@@ -254,7 +325,6 @@ public class EventService {
     private List<EventShortDto> getEventsPublicInternal(String text, List<Long> categories, Boolean paid,
                                                         LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                                         Boolean onlyAvailable, String sort, Integer from, Integer size) {
-
         // Безопасная обработка параметров
         final int finalFrom;
         final int finalSize;
@@ -317,17 +387,12 @@ public class EventService {
             List<EventShortDto> result = new ArrayList<>();
             for (Event event : events) {
                 try {
-                    // Устанавливаем просмотры
-                    Long views = viewsMap.get(event.getId());
-                    if (views != null) {
-                        event.setViews(views);
-                    } else {
-                        event.setViews(0L);
-                    }
-
                     // Маппим в DTO
                     EventShortDto dto = eventMapper.toEventShortDto(event);
                     if (dto != null) {
+                        // Устанавливаем просмотры из статистики
+                        Long views = viewsMap.get(event.getId());
+                        dto.setViews(views != null ? views : 0L);
                         result.add(dto);
                     }
                 } catch (Exception e) {
@@ -360,12 +425,16 @@ public class EventService {
                 throw new NotFoundException("Событие с id=" + eventId + " не найдено");
             }
 
-            // Получаем статистику просмотров и увеличиваем на 1
+            // Получаем статистику просмотров из сервиса статистики
             List<ViewStats> stats = getStatsForEvent(event);
             Long currentViews = stats.isEmpty() ? 0L : stats.get(0).getHits();
-            event.setViews(currentViews + 1); // Увеличиваем просмотры на 1
 
+            // Создаем DTO с актуальными данными
             EventFullDto result = eventMapper.toEventFullDto(event);
+
+            // Устанавливаем актуальное количество просмотров (не увеличиваем на 1, так как статистика уже учитывает этот запрос)
+            result.setViews(currentViews);
+
             if (result == null) {
                 throw new RuntimeException("Ошибка при маппинге публичного события");
             }
@@ -376,6 +445,24 @@ public class EventService {
         } catch (Exception e) {
             log.error("Ошибка при получении публичного события {}: {}", eventId, e.getMessage(), e);
             throw new RuntimeException("Ошибка при обработке запроса события");
+        }
+    }
+
+    private List<ViewStats> getStatsForEvent(Event event) {
+        if (event == null) {
+            return Collections.emptyList();
+        }
+
+        String uri = "/events/" + event.getId();
+        LocalDateTime start = LocalDateTime.now().minusYears(1);
+        LocalDateTime end = LocalDateTime.now();
+
+        try {
+            List<ViewStats> stats = statsClient.getStats(start, end, List.of(uri), true);
+            return stats != null ? stats : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Ошибка при получении статистики по событию {}: {}", event.getId(), e.getMessage());
+            return Collections.emptyList();
         }
     }
 
@@ -454,69 +541,6 @@ public class EventService {
         }
         if (updateRequest.getTitle() != null && !updateRequest.getTitle().isBlank()) {
             event.setTitle(updateRequest.getTitle());
-        }
-    }
-
-    private Map<Long, Long> getViewsForEvents(List<Event> events) {
-        try {
-            if (events == null || events.isEmpty()) {
-                return new HashMap<>();
-            }
-
-            List<String> uris = new ArrayList<>();
-            for (Event event : events) {
-                uris.add("/events/" + event.getId());
-            }
-
-            LocalDateTime start = LocalDateTime.now().minusYears(1);
-            LocalDateTime end = LocalDateTime.now();
-
-            List<ViewStats> stats = statsClient.getStats(start, end, uris, true);
-
-            if (stats == null || stats.isEmpty()) {
-                return new HashMap<>();
-            }
-
-            Map<Long, Long> viewsMap = new HashMap<>();
-            for (ViewStats stat : stats) {
-                try {
-                    String uri = stat.getUri();
-                    if (uri != null && uri.startsWith("/events/")) {
-                        String idStr = uri.substring("/events/".length());
-                        // Убираем параметры запроса, если есть
-                        if (idStr.contains("?")) {
-                            idStr = idStr.substring(0, idStr.indexOf('?'));
-                        }
-                        Long eventId = Long.parseLong(idStr);
-                        viewsMap.put(eventId, stat.getHits());
-                    }
-                } catch (Exception e) {
-                    log.debug("Не удалось обработать статистику для URI: {}", stat.getUri());
-                }
-            }
-
-            return viewsMap;
-        } catch (Exception e) {
-            log.warn("Ошибка при получении статистики: {}", e.getMessage());
-            return new HashMap<>();
-        }
-    }
-
-    private List<ViewStats> getStatsForEvent(Event event) {
-        if (event == null) {
-            return Collections.emptyList();
-        }
-
-        String uri = "/events/" + event.getId();
-        LocalDateTime start = LocalDateTime.now().minusYears(1);
-        LocalDateTime end = LocalDateTime.now();
-
-        try {
-            List<ViewStats> stats = statsClient.getStats(start, end, List.of(uri), true);
-            return stats != null ? stats : Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Ошибка при получении статистики по событию {}: {}", event.getId(), e.getMessage());
-            return Collections.emptyList();
         }
     }
 }
