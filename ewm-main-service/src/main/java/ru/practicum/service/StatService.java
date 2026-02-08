@@ -46,7 +46,6 @@ public class StatService {
             log.debug("Sending hit to stats service: {}", hit);
 
             if (statsClient != null) {
-                // Просто вызываем метод, не присваиваем результат
                 statsClient.hit(hit);
                 log.debug("Successfully saved hit for URI: {}", uri);
             } else {
@@ -54,11 +53,12 @@ public class StatService {
             }
         } catch (Exception e) {
             log.error("Error saving hit for request {}: {}", request.getRequestURI(), e.getMessage());
-            // Не бросаем исключение дальше - статистика не должна ломать основную логику
+            // статистика не должна ломать основную логику
         }
     }
 
-    private String getClientIp(HttpServletRequest request) {
+    // было private -> стало public (используется в fallback-подсчёте views)
+    public String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
             ip = request.getHeader("Proxy-Client-IP");
@@ -70,7 +70,6 @@ public class StatService {
             ip = request.getRemoteAddr();
         }
 
-        // Если IP содержит несколько адресов (при использовании прокси), берем первый
         if (ip != null && ip.contains(",")) {
             ip = ip.split(",")[0].trim();
         }
