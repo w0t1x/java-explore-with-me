@@ -67,7 +67,7 @@ services:
 
   # Основной сервис
   ewm-main-service:
-    build: ./ewm-main-service
+    build: ewm-main-ser
     container_name: ewm-main-service
     ports:
       - "8080:8080"
