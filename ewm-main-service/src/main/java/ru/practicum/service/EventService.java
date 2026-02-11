@@ -108,9 +108,11 @@ public class EventService {
     @Transactional
     public EventFullDto createEvent(long userId, NewEventDto dto) {
         User user = userService.getOrThrow(userId);
+
         if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ConflictException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
+            throw new BadRequestException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
         }
+
         Category category = categoryService.getEntity(dto.getCategory());
         Event event = EventMapper.toEntity(dto, category, user);
         Event saved = eventRepository.save(event);
@@ -135,7 +137,7 @@ public class EventService {
         }
 
         if (dto.getEventDate() != null && dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new ConflictException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
+            throw new BadRequestException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
         }
 
         applyUpdate(event, dto.getTitle(), dto.getAnnotation(), dto.getDescription(), dto.getCategory(),

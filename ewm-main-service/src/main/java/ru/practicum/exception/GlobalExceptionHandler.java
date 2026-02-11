@@ -4,6 +4,8 @@ import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageConversionException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -31,12 +33,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, REASON_NOT_FOUND, e.getMessage());
     }
 
-    @ExceptionHandler({ConflictException.class})
+    @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ApiError> handleConflict(ConflictException e) {
         return build(HttpStatus.CONFLICT, REASON_FORBIDDEN, e.getMessage());
     }
 
-    @ExceptionHandler({BadRequestException.class})
+    @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ApiError> handleBadRequest(BadRequestException e) {
         return build(HttpStatus.BAD_REQUEST, REASON_BAD_REQUEST, e.getMessage());
     }
@@ -62,13 +64,18 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, REASON_BAD_REQUEST, msg);
     }
 
-    @ExceptionHandler({ConstraintViolationException.class})
+    @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(ConstraintViolationException e) {
         return build(HttpStatus.BAD_REQUEST, REASON_BAD_REQUEST, e.getMessage());
     }
 
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class})
     public ResponseEntity<ApiError> handleTypeMismatch(Exception e) {
+        return build(HttpStatus.BAD_REQUEST, REASON_BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, HttpMessageConversionException.class})
+    public ResponseEntity<ApiError> handleMessageConversion(Exception e) {
         return build(HttpStatus.BAD_REQUEST, REASON_BAD_REQUEST, e.getMessage());
     }
 

@@ -3,8 +3,10 @@ package ru.practicum.dto.event;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import ru.practicum.dto.location.LocationDto;
 
 import java.time.LocalDateTime;
@@ -13,6 +15,8 @@ import static ru.practicum.util.DateTimeUtil.EWM_DATE_TIME_PATTERN;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class NewEventDto {
     @NotBlank
     @Size(min = 20, max = 2000)

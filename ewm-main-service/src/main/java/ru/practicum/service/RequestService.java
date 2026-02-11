@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.practicum.dto.request.*;
-import ru.practicum.exception.BadRequestException;
 import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
 import ru.practicum.mapper.RequestMapper;
@@ -67,6 +66,7 @@ public class RequestService {
                 .requester(requester)
                 .status(status)
                 .build();
+
         ParticipationRequest saved = requestRepository.save(pr);
         return RequestMapper.toDto(saved);
     }
@@ -76,9 +76,15 @@ public class RequestService {
         userService.getOrThrow(userId);
         ParticipationRequest req = requestRepository.findById(requestId)
                 .orElseThrow(() -> new NotFoundException("Request with id=" + requestId + " was not found"));
+
         if (!req.getRequester().getId().equals(userId)) {
             throw new ConflictException("Only requester can cancel request");
         }
+
+        if (req.getStatus() != RequestStatus.PENDING) {
+            throw new ConflictException("Only PENDING request can be canceled");
+        }
+
         req.setStatus(RequestStatus.CANCELED);
         return RequestMapper.toDto(requestRepository.save(req));
     }
@@ -99,7 +105,6 @@ public class RequestService {
 
         List<ParticipationRequest> requests = requestRepository.findAllByEventIdAndIdIn(eventId, update.getRequestIds());
         if (requests.size() != update.getRequestIds().size()) {
-            // some request not found under event
             throw new NotFoundException("Request was not found");
         }
 
@@ -110,8 +115,9 @@ public class RequestService {
 
         for (ParticipationRequest r : requests) {
             if (r.getStatus() != RequestStatus.PENDING) {
-                throw new BadRequestException("Request must have status PENDING");
+                throw new ConflictException("Request must have status PENDING");
             }
+
             if (update.getStatus() == RequestUpdateStatus.CONFIRMED) {
                 if (event.getParticipantLimit() != 0 && confirmedCount >= event.getParticipantLimit()) {
                     throw new ConflictException("The participant limit has been reached");
@@ -130,13 +136,15 @@ public class RequestService {
         if (update.getStatus() == RequestUpdateStatus.CONFIRMED
                 && event.getParticipantLimit() != 0
                 && confirmedCount >= event.getParticipantLimit()) {
-            // reject all the remaining pending requests for this event
+
             List<ParticipationRequest> pending = requestRepository.findAllByEventId(eventId).stream()
                     .filter(r -> r.getStatus() == RequestStatus.PENDING)
                     .collect(Collectors.toList());
+
             for (ParticipationRequest p : pending) {
                 p.setStatus(RequestStatus.REJECTED);
             }
+
             requestRepository.saveAll(pending);
             rejectedDtos.addAll(pending.stream().map(RequestMapper::toDto).toList());
         }

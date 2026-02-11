@@ -4,8 +4,10 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import ru.practicum.dto.location.LocationDto;
 import ru.practicum.model.UserStateAction;
 
@@ -15,6 +17,8 @@ import static ru.practicum.util.DateTimeUtil.EWM_DATE_TIME_PATTERN;
 
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UpdateEventUserRequest {
     @Size(min = 20, max = 2000)
     private String annotation;
