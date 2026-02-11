@@ -7,7 +7,8 @@ import ru.practicum.model.Compilation;
 import java.util.List;
 
 public final class CompilationMapper {
-    private CompilationMapper() {}
+    private CompilationMapper() {
+    }
 
     public static CompilationDto toDto(Compilation entity, List<EventShortDto> events) {
         return CompilationDto.builder()

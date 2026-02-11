@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public final class EventSpecifications {
-    private EventSpecifications() {}
+    private EventSpecifications() {
+    }
 
     public static Specification<Event> isPublished() {
         return (root, query, cb) -> cb.equal(root.get("state"), EventState.PUBLISHED);

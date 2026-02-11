@@ -6,7 +6,8 @@ import ru.practicum.dto.user.UserShortDto;
 import ru.practicum.model.User;
 
 public final class UserMapper {
-    private UserMapper() {}
+    private UserMapper() {
+    }
 
     public static User toEntity(NewUserRequest dto) {
         return User.builder()

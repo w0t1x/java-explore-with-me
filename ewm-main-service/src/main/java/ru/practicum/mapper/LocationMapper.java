@@ -4,7 +4,8 @@ import ru.practicum.dto.location.LocationDto;
 import ru.practicum.model.Location;
 
 public final class LocationMapper {
-    private LocationMapper() {}
+    private LocationMapper() {
+    }
 
     public static Location toEntity(LocationDto dto) {
         if (dto == null) return null;

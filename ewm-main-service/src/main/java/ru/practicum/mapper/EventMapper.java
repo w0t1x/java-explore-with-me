@@ -11,7 +11,8 @@ import ru.practicum.model.User;
 import java.time.LocalDateTime;
 
 public final class EventMapper {
-    private EventMapper() {}
+    private EventMapper() {
+    }
 
     public static Event toEntity(NewEventDto dto, Category category, User initiator) {
         return Event.builder()

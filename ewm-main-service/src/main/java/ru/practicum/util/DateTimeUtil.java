@@ -4,7 +4,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 public final class DateTimeUtil {
-    private DateTimeUtil() {}
+    private DateTimeUtil() {
+    }
 
     public static final String EWM_DATE_TIME_PATTERN = "yyyy-MM-dd HH:mm:ss";
     public static final DateTimeFormatter EWM_FORMATTER = DateTimeFormatter.ofPattern(EWM_DATE_TIME_PATTERN);
