@@ -7,6 +7,7 @@ import ru.practicum.statsdto.ViewStats;
 
 import java.net.URI;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,6 +23,8 @@ public class SimpleStatsClient implements StatsClient {
 
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final Charset CHARSET = StandardCharsets.UTF_8;
+
 
     public SimpleStatsClient(String serverUrl) {
         this.httpClient = HttpClient.newHttpClient();
@@ -50,8 +53,8 @@ public class SimpleStatsClient implements StatsClient {
                                     List<String> uris, boolean unique) {
         try {
             StringBuilder urlBuilder = new StringBuilder(serverUrl + "/stats")
-                    .append("?start=").append(URLEncoder.encode(start.format(FORMATTER), StandardCharsets.UTF_8))
-                    .append("&end=").append(URLEncoder.encode(end.format(FORMATTER), StandardCharsets.UTF_8))
+                    .append("?start=").append(URLEncoder.encode(start.format(FORMATTER), CHARSET))
+                    .append("&end=").append(URLEncoder.encode(end.format(FORMATTER), CHARSET))
                     .append("&unique=").append(unique);
 
             if (uris != null && !uris.isEmpty()) {
