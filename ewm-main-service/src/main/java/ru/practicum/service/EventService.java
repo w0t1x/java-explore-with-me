@@ -189,10 +189,15 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
 
-        // No bean validation required, but we have some rules from spec
         if (dto.getEventDate() != null && event.getPublishedOn() != null
                 && dto.getEventDate().isBefore(event.getPublishedOn().plusHours(1))) {
             throw new ConflictException("Event date must be at least 1 hour after publication");
+        }
+
+        if (dto.getEventDate() != null && dto.getEventDate().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException(
+                    "Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate()
+            );
         }
 
         applyUpdate(event, dto.getTitle(), dto.getAnnotation(), dto.getDescription(), dto.getCategory(),

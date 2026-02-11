@@ -25,10 +25,14 @@ public class StatsService {
     private String appName;
 
     public void saveHit(HttpServletRequest request) {
-        EndpointHit hit = new EndpointHit(appName,
+        String ip = extractClientIp(request);
+
+        EndpointHit hit = new EndpointHit(
+                appName,
                 request.getRequestURI(),
-                request.getRemoteAddr(),
-                LocalDateTime.now());
+                ip,
+                LocalDateTime.now()
+        );
         statsClient.hit(hit);
     }
 
@@ -36,12 +40,13 @@ public class StatsService {
         if (events == null || events.isEmpty()) {
             return Map.of();
         }
+
         List<String> uris = events.stream()
                 .map(e -> "/events/" + e.getId())
                 .distinct()
                 .collect(Collectors.toList());
 
-        List<ViewStats> stats = statsClient.getStats(EPOCH, LocalDateTime.now(), uris, false);
+        List<ViewStats> stats = statsClient.getStats(EPOCH, LocalDateTime.now(), uris, true);
 
         Map<String, Long> uriHits = new HashMap<>();
         for (ViewStats vs : stats) {
@@ -58,8 +63,16 @@ public class StatsService {
 
     public long getViewsForEvent(long eventId) {
         List<ViewStats> stats = statsClient.getStats(EPOCH, LocalDateTime.now(),
-                List.of("/events/" + eventId), false);
+                List.of("/events/" + eventId), true);
         if (stats.isEmpty()) return 0L;
         return stats.getFirst().getHits();
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

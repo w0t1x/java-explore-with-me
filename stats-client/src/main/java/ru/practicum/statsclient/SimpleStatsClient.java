@@ -1,10 +1,16 @@
 package ru.practicum.statsclient;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 import ru.practicum.statsdto.EndpointHit;
 import ru.practicum.statsdto.ViewStats;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
@@ -25,11 +31,21 @@ public class SimpleStatsClient implements StatsClient {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final Charset CHARSET = StandardCharsets.UTF_8;
 
-
     public SimpleStatsClient(String serverUrl) {
         this.httpClient = HttpClient.newHttpClient();
         this.serverUrl = serverUrl;
+
         this.objectMapper = new ObjectMapper();
+        this.objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+        SimpleModule module = new SimpleModule();
+        module.addSerializer(LocalDateTime.class, new StdSerializer<>(LocalDateTime.class) {
+            @Override
+            public void serialize(LocalDateTime value, JsonGenerator gen, SerializerProvider provider) throws IOException {
+                gen.writeString(value.format(FORMATTER));
+            }
+        });
+        this.objectMapper.registerModule(module);
     }
 
     @Override
