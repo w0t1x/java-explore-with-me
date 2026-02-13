@@ -16,6 +16,7 @@ import ru.practicum.model.Compilation;
 import ru.practicum.model.Event;
 import ru.practicum.model.RequestStatus;
 import ru.practicum.repository.CompilationRepository;
+import ru.practicum.repository.ConfirmedCount;
 import ru.practicum.repository.EventRepository;
 import ru.practicum.repository.ParticipationRequestRepository;
 
@@ -28,6 +29,8 @@ import static ru.practicum.util.PageableUtil.fromOffset;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CompilationService {
+
+    private static final long DEFAULT_COUNT = 0L;
 
     private final CompilationRepository compilationRepository;
     private final EventRepository eventRepository;
@@ -64,8 +67,12 @@ public class CompilationService {
         Compilation compilation = compilationRepository.findById(compId)
                 .orElseThrow(() -> new NotFoundException("Compilation with id=" + compId + " was not found"));
 
-        if (dto.getTitle() != null) compilation.setTitle(dto.getTitle());
-        if (dto.getPinned() != null) compilation.setPinned(dto.getPinned());
+        if (dto.getTitle() != null) {
+            compilation.setTitle(dto.getTitle());
+        }
+        if (dto.getPinned() != null) {
+            compilation.setPinned(dto.getPinned());
+        }
         if (dto.getEvents() != null) {
             Set<Event> events = new HashSet<>();
             if (!dto.getEvents().isEmpty()) {
@@ -80,12 +87,10 @@ public class CompilationService {
 
     public List<CompilationDto> getAll(Boolean pinned, int from, int size) {
         Pageable pageable = fromOffset(from, size, Sort.by("id").ascending());
-        List<Compilation> comps;
-        if (pinned == null) {
-            comps = compilationRepository.findAll(pageable).getContent();
-        } else {
-            comps = compilationRepository.findAllByPinned(pinned, pageable).getContent();
-        }
+
+        List<Compilation> comps = (pinned == null)
+                ? compilationRepository.findAll(pageable).getContent()
+                : compilationRepository.findAllByPinned(pinned, pageable).getContent();
 
         return comps.stream()
                 .map(this::toDtoWithEvents)
@@ -100,24 +105,38 @@ public class CompilationService {
 
     private CompilationDto toDtoWithEvents(Compilation compilation) {
         List<Event> events = new ArrayList<>(compilation.getEvents());
-        Map<Long, Long> views = statsService.getViewsForEvents(events);
 
-        Map<Long, Long> confirmed = new HashMap<>();
-        if (!events.isEmpty()) {
-            List<Long> ids = events.stream().map(Event::getId).toList();
-            for (ParticipationRequestRepository.ConfirmedCount cc :
-                    requestRepository.countByEventIdsAndStatus(ids, RequestStatus.CONFIRMED)) {
-                confirmed.put(cc.getEventId(), cc.getCnt());
-            }
-        }
+        Map<Long, Long> views = statsService.getViewsForEvents(events);
+        Map<Long, Long> confirmed = getConfirmedCounts(events);
 
         List<EventShortDto> eventDtos = events.stream()
                 .sorted(Comparator.comparingLong(Event::getId))
-                .map(e -> EventMapper.toShortDto(e,
-                        confirmed.getOrDefault(e.getId(), 0L),
-                        views.getOrDefault(e.getId(), 0L)))
+                .map(e -> EventMapper.toShortDto(
+                        e,
+                        confirmed.getOrDefault(e.getId(), DEFAULT_COUNT),
+                        views.getOrDefault(e.getId(), DEFAULT_COUNT)
+                ))
                 .collect(Collectors.toList());
 
         return CompilationMapper.toDto(compilation, eventDtos);
+    }
+
+    private Map<Long, Long> getConfirmedCounts(List<Event> events) {
+        if (events == null || events.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Long> eventIds = events.stream()
+                .map(Event::getId)
+                .toList();
+
+        List<ConfirmedCount> counts =
+                requestRepository.countByEventIdsAndStatus(eventIds, RequestStatus.CONFIRMED);
+
+        Map<Long, Long> confirmed = new HashMap<>();
+        for (ConfirmedCount cc : counts) {
+            confirmed.put(cc.getEventId(), cc.getCnt());
+        }
+        return confirmed;
     }
 }

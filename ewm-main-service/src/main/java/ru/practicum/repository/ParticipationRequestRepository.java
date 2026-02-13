@@ -27,10 +27,4 @@ public interface ParticipationRequestRepository extends JpaRepository<Participat
             "group by r.event.id")
     List<ConfirmedCount> countByEventIdsAndStatus(@Param("eventIds") Collection<Long> eventIds,
                                                   @Param("status") RequestStatus status);
-
-    interface ConfirmedCount {
-        Long getEventId();
-
-        Long getCnt();
-    }
 }

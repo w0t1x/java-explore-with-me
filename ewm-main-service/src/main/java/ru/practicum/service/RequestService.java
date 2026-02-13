@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class RequestService {
 
+    private static final int NO_LIMIT = 0;
+
     private final ParticipationRequestRepository requestRepository;
     private final EventRepository eventRepository;
     private final UserService userService;
@@ -41,22 +43,22 @@ public class RequestService {
         if (event.getInitiator().getId().equals(userId)) {
             throw new ConflictException("Initiator cannot make request to own event");
         }
-
         if (event.getState() != EventState.PUBLISHED) {
             throw new ConflictException("Event must be published");
         }
-
         if (requestRepository.existsByRequesterIdAndEventId(userId, eventId)) {
             throw new ConflictException("Request already exists");
         }
 
         long confirmed = requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
-        if (event.getParticipantLimit() != 0 && confirmed >= event.getParticipantLimit()) {
+        boolean hasLimit = event.getParticipantLimit() > NO_LIMIT;
+
+        if (hasLimit && confirmed >= event.getParticipantLimit()) {
             throw new ConflictException("The participant limit has been reached");
         }
 
         RequestStatus status = RequestStatus.PENDING;
-        if (!event.isRequestModeration() || event.getParticipantLimit() == 0) {
+        if (!event.isRequestModeration() || !hasLimit) {
             status = RequestStatus.CONFIRMED;
         }
 
@@ -74,6 +76,7 @@ public class RequestService {
     @Transactional
     public ParticipationRequestDto cancel(long userId, long requestId) {
         userService.getOrThrow(userId);
+
         ParticipationRequest req = requestRepository.findById(requestId)
                 .orElseThrow(() -> new NotFoundException("Request with id=" + requestId + " was not found"));
 
@@ -103,7 +106,9 @@ public class RequestService {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
 
-        List<ParticipationRequest> requests = requestRepository.findAllByEventIdAndIdIn(eventId, update.getRequestIds());
+        List<ParticipationRequest> requests =
+                requestRepository.findAllByEventIdAndIdIn(eventId, update.getRequestIds());
+
         if (requests.size() != update.getRequestIds().size()) {
             throw new NotFoundException("Request was not found");
         }
@@ -112,14 +117,18 @@ public class RequestService {
         List<ParticipationRequestDto> rejectedDtos = new ArrayList<>();
 
         long confirmedCount = requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
+        boolean hasLimit = event.getParticipantLimit() > NO_LIMIT;
+
+        RequestUpdateStatus status = update.getStatus();
+        boolean needConfirm = RequestUpdateStatus.CONFIRMED.equals(status);
 
         for (ParticipationRequest r : requests) {
             if (r.getStatus() != RequestStatus.PENDING) {
                 throw new ConflictException("Request must have status PENDING");
             }
 
-            if (update.getStatus() == RequestUpdateStatus.CONFIRMED) {
-                if (event.getParticipantLimit() != 0 && confirmedCount >= event.getParticipantLimit()) {
+            if (needConfirm) {
+                if (hasLimit && confirmedCount >= event.getParticipantLimit()) {
                     throw new ConflictException("The participant limit has been reached");
                 }
                 r.setStatus(RequestStatus.CONFIRMED);
@@ -133,10 +142,7 @@ public class RequestService {
 
         requestRepository.saveAll(requests);
 
-        if (update.getStatus() == RequestUpdateStatus.CONFIRMED
-                && event.getParticipantLimit() != 0
-                && confirmedCount >= event.getParticipantLimit()) {
-
+        if (needConfirm && hasLimit && confirmedCount >= event.getParticipantLimit()) {
             List<ParticipationRequest> pending = requestRepository.findAllByEventId(eventId).stream()
                     .filter(r -> r.getStatus() == RequestStatus.PENDING)
                     .collect(Collectors.toList());

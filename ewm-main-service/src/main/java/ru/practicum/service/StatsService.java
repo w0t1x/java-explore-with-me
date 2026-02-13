@@ -19,18 +19,20 @@ import static ru.practicum.util.DateTimeUtil.EPOCH;
 @RequiredArgsConstructor
 public class StatsService {
 
+    private static final long DEFAULT_HITS = 0L;
+    private static final String EVENT_URI_PREFIX = "/events/";
+    private static final String X_FORWARDED_FOR = "X-Forwarded-For";
+
     private final StatsClient statsClient;
 
     @Value("${ewm.app:ewm-main-service}")
     private String appName;
 
     public void saveHit(HttpServletRequest request) {
-        String ip = extractClientIp(request);
-
         EndpointHit hit = new EndpointHit(
                 appName,
                 request.getRequestURI(),
-                ip,
+                extractClientIp(request),
                 LocalDateTime.now()
         );
         statsClient.hit(hit);
@@ -42,7 +44,7 @@ public class StatsService {
         }
 
         List<String> uris = events.stream()
-                .map(e -> "/events/" + e.getId())
+                .map(e -> EVENT_URI_PREFIX + e.getId())
                 .distinct()
                 .collect(Collectors.toList());
 
@@ -55,21 +57,29 @@ public class StatsService {
 
         Map<Long, Long> result = new HashMap<>();
         for (Event e : events) {
-            String uri = "/events/" + e.getId();
-            result.put(e.getId(), uriHits.getOrDefault(uri, 0L));
+            String uri = EVENT_URI_PREFIX + e.getId();
+            result.put(e.getId(), uriHits.getOrDefault(uri, DEFAULT_HITS));
         }
+
         return result;
     }
 
     public long getViewsForEvent(long eventId) {
-        List<ViewStats> stats = statsClient.getStats(EPOCH, LocalDateTime.now(),
-                List.of("/events/" + eventId), true);
-        if (stats.isEmpty()) return 0L;
-        return stats.getFirst().getHits();
+        List<ViewStats> stats = statsClient.getStats(
+                EPOCH,
+                LocalDateTime.now(),
+                List.of(EVENT_URI_PREFIX + eventId),
+                true
+        );
+
+        if (stats.isEmpty()) {
+            return DEFAULT_HITS;
+        }
+        return stats.get(0).getHits();
     }
 
     private String extractClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
+        String xff = request.getHeader(X_FORWARDED_FOR);
         if (xff != null && !xff.isBlank()) {
             return xff.split(",")[0].trim();
         }

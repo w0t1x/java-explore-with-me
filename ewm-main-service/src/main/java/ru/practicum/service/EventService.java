@@ -12,6 +12,7 @@ import ru.practicum.exception.ConflictException;
 import ru.practicum.exception.NotFoundException;
 import ru.practicum.mapper.EventMapper;
 import ru.practicum.model.*;
+import ru.practicum.repository.ConfirmedCount;
 import ru.practicum.repository.EventRepository;
 import ru.practicum.repository.ParticipationRequestRepository;
 import ru.practicum.repository.spec.EventSpecifications;
@@ -27,17 +28,27 @@ import static ru.practicum.util.PageableUtil.fromOffset;
 @Transactional(readOnly = true)
 public class EventService {
 
+    private static final long DEFAULT_COUNT = 0L;
+
+    private static final int USER_EVENT_MIN_HOURS_BEFORE_START = 2;
+    private static final int ADMIN_PUBLISH_MIN_HOURS_BEFORE_START = 1;
+
     private final EventRepository eventRepository;
     private final UserService userService;
     private final CategoryService categoryService;
     private final StatsService statsService;
     private final ParticipationRequestRepository requestRepository;
 
-    // --- Public ---
-    public List<EventShortDto> publicSearch(String text, List<Long> categories, Boolean paid,
-                                            LocalDateTime rangeStart, LocalDateTime rangeEnd,
-                                            boolean onlyAvailable, EventSort sort,
-                                            int from, int size) {
+    public List<EventShortDto> publicSearch(String text,
+                                            List<Long> categories,
+                                            Boolean paid,
+                                            LocalDateTime rangeStart,
+                                            LocalDateTime rangeEnd,
+                                            boolean onlyAvailable,
+                                            EventSort sort,
+                                            int from,
+                                            int size) {
+
         if (rangeStart != null && rangeEnd != null && rangeEnd.isBefore(rangeStart)) {
             throw new BadRequestException("rangeEnd must not be before rangeStart");
         }
@@ -54,27 +65,25 @@ public class EventService {
                 .and(EventSpecifications.onlyAvailable(onlyAvailable));
 
         Sort dbSort = Sort.by("eventDate").ascending();
-        if (sort == EventSort.EVENT_DATE || sort == null) {
-            dbSort = Sort.by("eventDate").ascending();
-        } else if (sort == EventSort.VIEWS) {
-            // can't sort by views in DB; sort after enrichment
-            dbSort = Sort.by("eventDate").ascending();
-        }
-
         Pageable pageable = fromOffset(from, size, dbSort);
+
         List<Event> events = eventRepository.findAll(spec, pageable).getContent();
 
         Map<Long, Long> confirmed = getConfirmedCounts(events);
         Map<Long, Long> views = statsService.getViewsForEvents(events);
 
         List<EventShortDto> dtos = events.stream()
-                .map(e -> EventMapper.toShortDto(e,
-                        confirmed.getOrDefault(e.getId(), 0L),
-                        views.getOrDefault(e.getId(), 0L)))
+                .map(e -> EventMapper.toShortDto(
+                        e,
+                        confirmed.getOrDefault(e.getId(), DEFAULT_COUNT),
+                        views.getOrDefault(e.getId(), DEFAULT_COUNT)
+                ))
                 .collect(Collectors.toList());
 
         if (sort == EventSort.VIEWS) {
-            dtos.sort(Comparator.comparingLong((EventShortDto e) -> Optional.ofNullable(e.getViews()).orElse(0L)).reversed());
+            dtos.sort(Comparator
+                    .comparingLong((EventShortDto e) -> Optional.ofNullable(e.getViews()).orElse(DEFAULT_COUNT))
+                    .reversed());
         }
 
         return dtos;
@@ -83,25 +92,32 @@ public class EventService {
     public EventFullDto publicGet(long eventId) {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
+
         if (event.getState() != EventState.PUBLISHED) {
             throw new NotFoundException("Event with id=" + eventId + " was not found");
         }
+
         long confirmed = requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
         long views = statsService.getViewsForEvent(eventId);
+
         return EventMapper.toFullDto(event, confirmed, views);
     }
 
-    // --- Private ---
     public List<EventShortDto> getUserEvents(long userId, int from, int size) {
         userService.getOrThrow(userId);
+
         Pageable pageable = fromOffset(from, size, Sort.by("id").ascending());
         List<Event> events = eventRepository.findAllByInitiatorId(userId, pageable).getContent();
+
         Map<Long, Long> confirmed = getConfirmedCounts(events);
         Map<Long, Long> views = statsService.getViewsForEvents(events);
+
         return events.stream()
-                .map(e -> EventMapper.toShortDto(e,
-                        confirmed.getOrDefault(e.getId(), 0L),
-                        views.getOrDefault(e.getId(), 0L)))
+                .map(e -> EventMapper.toShortDto(
+                        e,
+                        confirmed.getOrDefault(e.getId(), DEFAULT_COUNT),
+                        views.getOrDefault(e.getId(), DEFAULT_COUNT)
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -109,21 +125,23 @@ public class EventService {
     public EventFullDto createEvent(long userId, NewEventDto dto) {
         User user = userService.getOrThrow(userId);
 
-        if (dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new BadRequestException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
-        }
+        LocalDateTime now = LocalDateTime.now();
+        validateUserEventDate(dto.getEventDate(), now);
 
         Category category = categoryService.getEntity(dto.getCategory());
         Event event = EventMapper.toEntity(dto, category, user);
+
         Event saved = eventRepository.save(event);
-        return EventMapper.toFullDto(saved, 0L, 0L);
+        return EventMapper.toFullDto(saved, DEFAULT_COUNT, DEFAULT_COUNT);
     }
 
     public EventFullDto getUserEvent(long userId, long eventId) {
         Event event = eventRepository.findByIdAndInitiatorId(eventId, userId)
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
+
         long confirmed = requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
         long views = statsService.getViewsForEvent(eventId);
+
         return EventMapper.toFullDto(event, confirmed, views);
     }
 
@@ -136,8 +154,9 @@ public class EventService {
             throw new ConflictException("Only pending or canceled events can be changed");
         }
 
-        if (dto.getEventDate() != null && dto.getEventDate().isBefore(LocalDateTime.now().plusHours(2))) {
-            throw new BadRequestException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
+        LocalDateTime now = LocalDateTime.now();
+        if (dto.getEventDate() != null) {
+            validateUserEventDate(dto.getEventDate(), now);
         }
 
         applyUpdate(event, dto.getTitle(), dto.getAnnotation(), dto.getDescription(), dto.getCategory(),
@@ -153,18 +172,20 @@ public class EventService {
         }
 
         Event saved = eventRepository.save(event);
+
         long confirmed = requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
         long views = statsService.getViewsForEvent(eventId);
+
         return EventMapper.toFullDto(saved, confirmed, views);
     }
 
-    // --- Admin ---
     public List<EventFullDto> adminSearch(List<Long> users, List<EventState> states, List<Long> categories,
                                           LocalDateTime rangeStart, LocalDateTime rangeEnd,
                                           int from, int size) {
         if (rangeStart != null && rangeEnd != null && rangeEnd.isBefore(rangeStart)) {
             throw new BadRequestException("rangeEnd must not be before rangeStart");
         }
+
         Specification<Event> spec = Specification.where(EventSpecifications.initiatorIn(users))
                 .and(EventSpecifications.stateIn(states))
                 .and(EventSpecifications.categoryIn(categories))
@@ -178,9 +199,11 @@ public class EventService {
         Map<Long, Long> views = statsService.getViewsForEvents(events);
 
         return events.stream()
-                .map(e -> EventMapper.toFullDto(e,
-                        confirmed.getOrDefault(e.getId(), 0L),
-                        views.getOrDefault(e.getId(), 0L)))
+                .map(e -> EventMapper.toFullDto(
+                        e,
+                        confirmed.getOrDefault(e.getId(), DEFAULT_COUNT),
+                        views.getOrDefault(e.getId(), DEFAULT_COUNT)
+                ))
                 .collect(Collectors.toList());
     }
 
@@ -189,15 +212,15 @@ public class EventService {
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new NotFoundException("Event with id=" + eventId + " was not found"));
 
-        if (dto.getEventDate() != null && event.getPublishedOn() != null
-                && dto.getEventDate().isBefore(event.getPublishedOn().plusHours(1))) {
-            throw new ConflictException("Event date must be at least 1 hour after publication");
+        LocalDateTime now = LocalDateTime.now();
+
+        if (dto.getEventDate() != null && dto.getEventDate().isBefore(now)) {
+            throw new BadRequestException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate());
         }
 
-        if (dto.getEventDate() != null && dto.getEventDate().isBefore(LocalDateTime.now())) {
-            throw new BadRequestException(
-                    "Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + dto.getEventDate()
-            );
+        if (dto.getEventDate() != null && event.getPublishedOn() != null
+                && dto.getEventDate().isBefore(event.getPublishedOn().plusHours(ADMIN_PUBLISH_MIN_HOURS_BEFORE_START))) {
+            throw new ConflictException("Event date must be at least 1 hour after publication");
         }
 
         applyUpdate(event, dto.getTitle(), dto.getAnnotation(), dto.getDescription(), dto.getCategory(),
@@ -209,11 +232,11 @@ public class EventService {
                 if (event.getState() != EventState.PENDING) {
                     throw new ConflictException("Cannot publish the event because it's not in the right state: " + event.getState());
                 }
-                if (event.getEventDate().isBefore(LocalDateTime.now().plusHours(1))) {
+                if (event.getEventDate().isBefore(now.plusHours(ADMIN_PUBLISH_MIN_HOURS_BEFORE_START))) {
                     throw new ConflictException("Event date must be at least 1 hour after publication");
                 }
                 event.setState(EventState.PUBLISHED);
-                event.setPublishedOn(LocalDateTime.now());
+                event.setPublishedOn(now);
             } else if (dto.getStateAction() == AdminStateAction.REJECT_EVENT) {
                 if (event.getState() == EventState.PUBLISHED) {
                     throw new ConflictException("Cannot reject the event because it's already published");
@@ -223,12 +246,19 @@ public class EventService {
         }
 
         Event saved = eventRepository.save(event);
+
         long confirmed = requestRepository.countByEventIdAndStatus(eventId, RequestStatus.CONFIRMED);
         long views = statsService.getViewsForEvent(eventId);
+
         return EventMapper.toFullDto(saved, confirmed, views);
     }
 
-    // --- helpers ---
+    private void validateUserEventDate(LocalDateTime eventDate, LocalDateTime now) {
+        if (eventDate.isBefore(now.plusHours(USER_EVENT_MIN_HOURS_BEFORE_START))) {
+            throw new BadRequestException("Field: eventDate. Error: должно содержать дату, которая еще не наступила. Value: " + eventDate);
+        }
+    }
+
     private void applyUpdate(Event event,
                              String title,
                              String annotation,
@@ -239,6 +269,7 @@ public class EventService {
                              Integer participantLimit,
                              Boolean requestModeration,
                              LocalDateTime eventDate) {
+
         if (title != null) event.setTitle(title);
         if (annotation != null) event.setAnnotation(annotation);
         if (description != null) event.setDescription(description);
@@ -251,11 +282,17 @@ public class EventService {
     }
 
     private Map<Long, Long> getConfirmedCounts(Collection<Event> events) {
-        if (events == null || events.isEmpty()) return Map.of();
+        if (events == null || events.isEmpty()) {
+            return Map.of();
+        }
+
         List<Long> ids = events.stream().map(Event::getId).toList();
+
+        List<ConfirmedCount> counts =
+                requestRepository.countByEventIdsAndStatus(ids, RequestStatus.CONFIRMED);
+
         Map<Long, Long> map = new HashMap<>();
-        for (ParticipationRequestRepository.ConfirmedCount cc :
-                requestRepository.countByEventIdsAndStatus(ids, RequestStatus.CONFIRMED)) {
+        for (ConfirmedCount cc : counts) {
             map.put(cc.getEventId(), cc.getCnt());
         }
         return map;
