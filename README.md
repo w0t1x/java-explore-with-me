@@ -73,47 +73,147 @@
 
 ## Запуск проекта
 
-### 1) Запуск через Docker Compose
+### Требования
 
-> Если вы собираете проект из исходников, сначала соберите JAR-файлы.
+Для запуска проекта должны быть установлены:
 
-```bash
-mvn clean package
-```
+- Java 21
+- Maven
+- Docker / Docker Compose
 
-Запуск инфраструктуры и сервисов:
+---
 
-```bash
-docker compose up -d --build
-```
+### 1. Запуск баз данных
 
-Поднимутся контейнеры:
-- `stats-db` (PostgreSQL для статистики)
-- `stats-server` (порт **9090**)
-- `ewm-db` (PostgreSQL для основного сервиса)
-- `ewm-main-service` (порт **8080**)
-
-Проверка доступности (Actuator):
-
-- `http://localhost:8080/actuator/health`
-- `http://localhost:9090/actuator/health`
-
-### 2) Локальный запуск без Docker (только БД в контейнерах)
-
-Сначала поднимите базы:
+Из корня проекта выполните:
 
 ```bash
 docker compose up -d stats-db ewm-db
 ```
 
-Затем запустите сервисы из корня проекта:
+Проверить, что контейнеры запущены, можно командой:
 
 ```bash
-# stats-server
-mvn -pl stats-server -am spring-boot:run
+docker ps -a
+```
 
-# ewm-main-service
-mvn -pl ewm-main-service -am spring-boot:run
+---
+
+### 2. Сборка проекта
+
+Из корня проекта выполните:
+
+```bash
+mvn clean package -DskipTests
+```
+
+---
+
+### 3. Запуск сервисов
+
+> Важно: корневой `pom.xml` является агрегатором модулей, поэтому запускать проект командой  
+> `mvn -f pom.xml spring-boot:run` нельзя.  
+> Каждый сервис нужно запускать отдельно.
+
+#### 3.1. Запуск `stats-server`
+
+```bash
+mvn -f stats-server/pom.xml spring-boot:run
+```
+
+Сервис будет доступен по адресу:
+
+```text
+http://localhost:9090
+```
+
+#### 3.2. Запуск `ewm-main-service`
+
+```bash
+mvn -f ewm-main-service/pom.xml spring-boot:run
+```
+
+Сервис будет доступен по адресу:
+
+```text
+http://localhost:8080
+```
+
+---
+
+### 4. Проверка работоспособности
+
+После запуска сервисов проверьте health-check:
+
+- `stats-server` — `http://localhost:9090/actuator/health`
+- `ewm-main-service` — `http://localhost:8080/actuator/health`
+
+Корректный ответ:
+
+```json
+{"status":"UP"}
+```
+
+---
+
+### 5. Проверка API сервиса статистики
+
+Для демонстрации работы `stats-server` можно выполнить следующий PowerShell-скрипт:
+
+```powershell
+Write-Host "1) Проверка health stats-server" -ForegroundColor Cyan
+curl.exe http://localhost:9090/actuator/health
+
+Write-Host ""
+Write-Host "2) Проверка health ewm-main-service" -ForegroundColor Cyan
+curl.exe http://localhost:8080/actuator/health
+
+Write-Host ""
+Write-Host "3) Отправка тестового hit в stats-server" -ForegroundColor Cyan
+$body = @{
+    app = "ewm-main-service"
+    uri = "/events/1"
+    ip = "127.0.0.1"
+    timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:9090/hit" `
+    -Method POST `
+    -ContentType "application/json" `
+    -Body $body
+
+Write-Host "Hit успешно отправлен" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "4) Чтение статистики по /events/1" -ForegroundColor Cyan
+$start = (Get-Date).Date.ToString("yyyy-MM-dd HH:mm:ss")
+$end = (Get-Date).Date.AddDays(1).ToString("yyyy-MM-dd HH:mm:ss")
+
+$url = "http://localhost:9090/stats?start=$([uri]::EscapeDataString($start))&end=$([uri]::EscapeDataString($end))&uris=/events/1&unique=false"
+curl.exe $url
+```
+
+Если сервис работает корректно, в ответе на последний запрос будет возвращён массив со статистикой, например:
+
+```json
+[
+  {
+    "app": "ewm-main-service",
+    "uri": "/events/1",
+    "hits": 1
+  }
+]
+```
+
+---
+
+### 6. Краткий порядок запуска
+
+```bash
+docker compose up -d stats-db ewm-db
+mvn clean package -DskipTests
+mvn -f stats-server/pom.xml spring-boot:run
+mvn -f ewm-main-service/pom.xml spring-boot:run
 ```
 
 ---
