@@ -118,7 +118,7 @@ mvn clean package -DskipTests
 #### 3.1. Запуск `stats-server`
 
 ```bash
-mvn -f stats-server/pom.xml spring-boot:run
+mvn -f pom.xml spring-boot:run
 ```
 
 Сервис будет доступен по адресу:
@@ -130,7 +130,7 @@ http://localhost:9090
 #### 3.2. Запуск `ewm-main-service`
 
 ```bash
-mvn -f ewm-main-service/pom.xml spring-boot:run
+mvn -f pom.xml spring-boot:run
 ```
 
 Сервис будет доступен по адресу:
