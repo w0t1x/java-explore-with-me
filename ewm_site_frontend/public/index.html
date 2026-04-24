@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explore With Me — афиша мероприятий</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="page-shell">
+  <header class="site-header">
+    <div class="container nav-row">
+      <a href="/" class="brand">EXPLORE WITH ME</a>
+      <nav class="nav-links">
+        <a href="#events">События</a>
+        <a href="#categories">Категории</a>
+        <a href="#compilations">Подборки</a>
+        <a href="#favorites">Избранное</a>
+      </nav>
+      <div class="header-actions">
+        <span class="page-tag" id="roleLabel">Гость</span>
+        <a href="/user.html" id="cabinetLink" class="ghost-btn small hidden">Личный кабинет</a>
+        <a href="/admin.html" id="adminLink" class="ghost-btn small hidden">Админ-панель</a>
+        <button id="openAuthBtn" class="primary-btn">Войти</button>
+        <div id="profileBox" class="inline-actions hidden">
+          <span class="badge accent" id="profileName">Пользователь</span>
+          <button id="logoutBtn" class="ghost-btn small">Выйти</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">Городская афиша и платформа событий</p>
+          <h1>Находите интересные мероприятия и управляйте участием</h1>
+          <p class="hero-text">
+            Explore With Me — это сервис, в котором пользователи могут просматривать события, переходить в подробные карточки,
+            сохранять понравившиеся мероприятия в избранное и пользоваться личным кабинетом после входа.
+          </p>
+          <div class="hero-actions">
+            <a href="#events" class="primary-btn">Смотреть события</a>
+            <button class="secondary-btn" id="heroLoginBtn">Войти / зарегистрироваться</button>
+          </div>
+          <div class="quick-stats" style="margin-top:22px">
+            <span class="stat-pill" id="eventsCounter">События: —</span>
+            <span class="stat-pill" id="categoriesCounter">Категории: —</span>
+            <span class="stat-pill" id="favoritesCounter">Избранное: —</span>
+          </div>
+        </div>
+        <aside class="hero-card clean">
+          <div>
+            <p class="section-label">Для гостей</p>
+            <h2>Просматривайте события без регистрации</h2>
+            <p class="lead-text">Гостям доступна витрина событий, фильтрация по категориям, подборки и подробные карточки мероприятий.</p>
+          </div>
+          <div class="divider"></div>
+          <div>
+            <p class="section-label">Для зарегистрированных</p>
+            <p class="lead-text">После входа открывается личный кабинет: мои события, мои заявки и персональная рабочая зона пользователя.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="container section" id="categories">
+      <div class="section-head">
+        <div>
+          <p class="section-label">Категории</p>
+          <h2>Выберите направление</h2>
+          <div class="section-subtitle">Фильтр поможет быстро сузить список событий.</div>
+        </div>
+        <button id="clearCategoryBtn" class="ghost-btn small">Сбросить категорию</button>
+      </div>
+      <div id="categoriesChips" class="chips"></div>
+    </section>
+
+    <section class="container section" id="events">
+      <div class="section-head">
+        <div>
+          <p class="section-label">События</p>
+          <h2>Найдите мероприятие по интересам</h2>
+        </div>
+        <div class="badge" id="eventsMeta">Загрузка...</div>
+      </div>
+      <div class="search-panel">
+        <form id="eventsForm" class="search-grid">
+          <label class="field field-wide"><span>Поиск</span><input type="text" name="text" placeholder="Например: концерт, выставка, лекция"></label>
+          <label class="field"><span>Платность</span><select name="paid"><option value="">Любые</option><option value="true">Платные</option><option value="false">Бесплатные</option></select></label>
+          <label class="field"><span>Доступность</span><select name="onlyAvailable"><option value="">Любые</option><option value="true">Только доступные</option></select></label>
+          <label class="field"><span>Сортировка</span><select name="sort"><option value="">По умолчанию</option><option value="EVENT_DATE">По дате</option><option value="VIEWS">По просмотрам</option></select></label>
+          <input type="hidden" name="categories" value=""><input type="hidden" name="from" value="0"><input type="hidden" name="size" value="12">
+          <div class="form-actions"><button type="submit" class="primary-btn">Найти</button><button type="button" id="resetEventsBtn" class="secondary-btn">Сбросить</button></div>
+        </form>
+      </div>
+      <div id="eventsList" class="event-grid"></div>
+    </section>
+
+    <section class="container section" id="compilations">
+      <div class="section-head">
+        <div>
+          <p class="section-label">Подборки</p>
+          <h2>Популярные коллекции событий</h2>
+        </div>
+      </div>
+      <div id="compilationsList" class="compilation-grid"></div>
+    </section>
+
+    <section class="container section" id="favorites">
+      <div class="section-head">
+        <div>
+          <p class="section-label">Избранное</p>
+          <h2>Ваш личный список</h2>
+          <div class="section-subtitle">Избранное сохраняется локально и доступно при следующем открытии сайта.</div>
+        </div>
+        <button id="clearFavoritesBtn" class="ghost-btn small">Очистить</button>
+      </div>
+      <div id="favoritesList" class="favorites-list"></div>
+    </section>
+
+    <section class="container section">
+      <div class="notice-card">
+        <div class="notice-row">
+          <div class="notice-icon">i</div>
+          <div>
+            <p class="section-label">Личный кабинет и админ-панель</p>
+            <h2 style="font-size:2rem">Разные окна для разных ролей</h2>
+            <p class="lead-text">Гость видит витрину событий. Зарегистрированный пользователь получает личный кабинет с персональными данными. Администратор работает в отдельной панели управления.</p>
+            <div class="access-actions">
+              <button id="ctaGuestBtn" class="primary-btn">Войти как пользователь</button>
+              <a href="/admin.html" class="secondary-btn">Открыть админ-панель</a>
+            </div>
+            <p class="right-note">Для демонстрации роли администратора используйте код: <strong>admin123</strong>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">Explore With Me — пользовательский сайт поверх backend-сервиса мероприятий.</div>
+  </footer>
+</div>
+
+<div class="modal hidden" id="eventModal">
+  <div class="modal-backdrop" id="closeModalBackdrop"></div>
+  <div class="modal-card">
+    <button class="modal-close" id="closeModalBtn">×</button>
+    <div id="eventModalContent"></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="authModal">
+  <div class="modal-backdrop" id="closeAuthBackdrop"></div>
+  <div class="auth-card">
+    <button class="modal-close" id="closeAuthBtn">×</button>
+    <p class="section-label">Вход в систему</p>
+    <h2>Выберите роль</h2>
+    <p class="lead-text">Для демонстрации можно быстро войти как обычный пользователь или как администратор.</p>
+    <div class="toolbar" style="margin:18px 0 20px">
+      <button type="button" class="role-chip" data-role="guest">Гость</button>
+      <button type="button" class="role-chip" data-role="user">Пользователь</button>
+      <button type="button" class="role-chip" data-role="admin">Администратор</button>
+    </div>
+    <form id="authForm" class="form-grid compact">
+      <input type="hidden" id="authRole" value="user">
+      <label class="field"><span>Имя</span><input id="authName" placeholder="Например: Иван"></label>
+      <label class="field"><span>ID пользователя</span><input id="authUserId" placeholder="Например: 1"></label>
+      <label class="field hidden" id="adminCodeWrap"><span>Код администратора</span><input id="authAdminCode" placeholder="Для демонстрации: admin123"></label>
+      <div class="auth-actions" style="grid-column:1/-1">
+        <button class="primary-btn" type="submit">Войти</button>
+        <button class="secondary-btn" type="button" id="closeAuthAltBtn" onclick="document.getElementById('closeAuthBtn').click()">Отмена</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/common.js"></script>
+<script src="/public.js"></script>
+</body>
+</html>

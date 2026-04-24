@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explore With Me — админ-панель</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="page-shell">
+  <header class="site-header">
+    <div class="container nav-row">
+      <a href="/" class="brand">EXPLORE WITH ME</a>
+      <nav class="nav-links">
+        <a href="/">Главная</a>
+        <a href="#services">Сервисы</a>
+        <a href="#moderation">События</a>
+        <a href="#users">Пользователи</a>
+      </nav>
+      <div class="header-actions">
+        <span class="page-tag" id="roleLabel">Администратор</span>
+        <a href="/user.html" id="cabinetLink" class="ghost-btn small hidden">Личный кабинет</a>
+        <a href="/admin.html" id="adminLink" class="ghost-btn small hidden">Админ-панель</a>
+        <button id="openAuthBtn" class="primary-btn">Войти</button>
+        <div id="profileBox" class="inline-actions hidden">
+          <span class="badge accent" id="profileName">Администратор</span>
+          <button id="logoutBtn" class="ghost-btn small">Выйти</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="adminApp">
+    <section class="hero">
+      <div class="container grid-2">
+        <div class="admin-card">
+          <p class="section-label">Админ-панель</p>
+          <h1 style="font-size:3.2rem">Панель управления системой</h1>
+          <p class="lead-text">В отдельном окне администратора собраны служебные данные: состояние сервисов, статистика просмотров, список пользователей и список событий для управления.</p>
+          <div class="toolbar" style="margin-top:20px">
+            <a href="/" class="secondary-btn">Открыть пользовательский сайт</a>
+            <button id="refreshAdminBtn" class="primary-btn">Обновить данные</button>
+          </div>
+        </div>
+        <div class="admin-card">
+          <p class="section-label">Роль</p>
+          <h2>Доступ только для администратора</h2>
+          <p class="lead-text">В эту страницу попадает только пользователь с ролью администратора. Для демонстрации вход выполняется через отдельную роль с кодом доступа.</p>
+          <div class="profile-lines">
+            <div><strong>Имя:</strong> <span id="adminNameValue">—</span></div>
+            <div><strong>Роль:</strong> Администратор</div>
+            <div><strong>Код для демонстрации:</strong> admin123</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container section" id="services">
+      <div class="section-head">
+        <div><p class="section-label">Служебная панель</p><h2>Состояние сервисов и статистика</h2></div>
+      </div>
+      <div class="grid-2">
+        <div class="admin-card">
+          <h3>Состояние сервисов</h3>
+          <div class="stat-row" style="margin-top:16px">
+            <span class="stat-pill" id="mainHealth">Основной сервис: проверка...</span>
+            <span class="stat-pill" id="statsHealth">Статистика: проверка...</span>
+          </div>
+          <p class="right-note" style="margin-top:16px">Проверка выполняется через actuator health-check у обоих backend-сервисов.</p>
+        </div>
+        <div class="admin-card">
+          <h3>Статистика просмотров</h3>
+          <form id="statsForm" class="form-grid compact" style="margin-top:16px">
+            <label class="field"><span>ID события</span><input id="statsEventId" placeholder="Например: 1"></label>
+            <div class="auth-actions" style="align-self:end"><button class="primary-btn" type="submit">Показать статистику</button></div>
+          </form>
+          <div id="statsResult" class="empty-state" style="margin-top:16px">Введите ID события, чтобы посмотреть статистику по URI вида /events/{id}.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="container section" id="moderation">
+      <div class="section-head">
+        <div><p class="section-label">События</p><h2>Список событий для управления</h2></div>
+        <div class="badge" id="adminEventsMeta">Загрузка...</div>
+      </div>
+      <div id="adminEventsList" class="event-grid"></div>
+    </section>
+
+    <section class="container section" id="users">
+      <div class="section-head">
+        <div><p class="section-label">Пользователи</p><h2>Зарегистрированные пользователи</h2></div>
+        <div class="badge" id="adminUsersMeta">Загрузка...</div>
+      </div>
+      <div id="adminUsersList" class="list-grid"></div>
+    </section>
+  </main>
+
+  <footer class="footer"><div class="container">Административное окно для сервисных операций.</div></footer>
+</div>
+
+<div class="modal hidden" id="eventModal">
+  <div class="modal-backdrop" id="closeModalBackdrop"></div>
+  <div class="modal-card">
+    <button class="modal-close" id="closeModalBtn">×</button>
+    <div id="eventModalContent"></div>
+  </div>
+</div>
+
+<div class="modal hidden" id="authModal">
+  <div class="modal-backdrop" id="closeAuthBackdrop"></div>
+  <div class="auth-card">
+    <button class="modal-close" id="closeAuthBtn">×</button>
+    <p class="section-label">Вход администратора</p>
+    <h2>Доступ в админ-панель</h2>
+    <div class="toolbar" style="margin:18px 0 20px">
+      <button type="button" class="role-chip" data-role="admin">Администратор</button>
+    </div>
+    <form id="authForm" class="form-grid compact">
+      <input type="hidden" id="authRole" value="admin">
+      <label class="field"><span>Имя</span><input id="authName"></label>
+      <label class="field"><span>ID пользователя</span><input id="authUserId" value="1"></label>
+      <label class="field" id="adminCodeWrap"><span>Код администратора</span><input id="authAdminCode" placeholder="admin123"></label>
+      <div class="auth-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Войти</button></div>
+    </form>
+  </div>
+</div>
+
+<script src="/common.js"></script>
+<script src="/admin.js"></script>
+</body>
+</html>
