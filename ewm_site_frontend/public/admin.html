@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explore With Me — админ-панель</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container nav-row">
+    <a href="/" class="brand">EXPLORE WITH ME</a>
+    <nav class="nav-links">
+      <a href="#services">Сервисы</a>
+      <a href="#categoriesAdmin">Категории</a>
+      <a href="#compilationsAdmin">Подборки</a>
+      <a href="#users">Пользователи</a>
+      <a href="#events">События</a>
+      <a href="#commentsAdmin">Комментарии</a>
+    </nav>
+    <div class="header-actions">
+      <span class="page-tag" id="roleLabel">Администратор</span>
+      <a href="/profile" id="cabinetLink" class="ghost-btn small hidden">Профиль</a>
+      <a href="/admin" id="adminLink" class="ghost-btn small hidden">Админ-панель</a>
+      <button id="openAuthBtn" class="primary-btn">Войти</button>
+      <div id="profileBox" class="header-actions hidden">
+        <span class="role-badge admin-highlight" id="profileName">Администратор</span>
+        <button id="logoutBtn" class="ghost-btn small">Выйти</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="adminRoot">
+  <section class="hero">
+    <div class="container grid-2">
+      <div class="section-card">
+        <p class="section-label">Отдельное административное окно</p>
+        <h1 style="font-size:3rem">Полноценная админ-панель</h1>
+        <p class="lead-text">Служебные элементы вынесены из пользовательского сайта в отдельную страницу. Здесь можно управлять категориями, подборками, пользователями и модерировать события.</p>
+        <div class="toolbar" style="margin-top:18px"><a href="/" class="secondary-btn">Открыть сайт</a><button id="refreshAdminBtn" class="primary-btn">Обновить данные</button></div>
+      </div>
+      <div class="section-card">
+        <p class="section-label">Вход администратора</p>
+        <h2>Только для роли admin</h2>
+        <p class="lead-text">Страница открывается через отдельную ссылку <strong>/admin</strong>. Для демонстрации используйте аккаунт администратора: <strong>admin@ewm.local</strong> / <strong>admin123</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="container section" id="services">
+    <div class="section-head"><div><p class="section-label">Служебная панель</p><h2>Health-check и статистика</h2></div></div>
+    <div class="grid-2">
+      <div class="section-card">
+        <h3>Состояние сервисов</h3>
+        <div class="stats-row" style="margin-top:16px"><span class="stat-pill" id="mainHealth">Основной сервис: проверка...</span><span class="stat-pill" id="statsHealth">Статистика: проверка...</span></div>
+      </div>
+      <div class="section-card">
+        <h3>Статистика просмотров</h3>
+        <form id="statsForm" class="form-grid profile-form" style="margin-top:16px">
+          <label class="field"><span>ID события</span><input id="statsEventId" placeholder="Например: 1"></label>
+          <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Показать статистику</button></div>
+        </form>
+        <div id="statsResult" class="empty-state" style="margin-top:16px">Введите ID события, чтобы посмотреть статистику по URI вида /events/{id}.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="container section" id="categoriesAdmin">
+    <div class="section-head"><div><p class="section-label">Категории</p><h2>Управление категориями</h2></div></div>
+    <div class="grid-2">
+      <div class="section-card">
+        <h3>Создать категорию</h3>
+        <form id="newCategoryForm" class="form-grid profile-form" style="margin-top:16px">
+          <label class="field"><span>Название категории</span><input id="newCategoryName" required></label>
+          <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Добавить категорию</button></div>
+        </form>
+      </div>
+      <div class="section-card">
+        <h3>Список категорий</h3>
+        <div class="notice">Именно отсюда берутся категории, которые потом видны на публичной главной странице и в форме создания события.</div>
+        <div id="adminCategoriesList" class="list-grid" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="container section" id="compilationsAdmin">
+    <div class="section-head"><div><p class="section-label">Подборки</p><h2>Управление подборками событий</h2></div></div>
+    <div class="grid-2">
+      <div class="section-card">
+        <h3>Создать подборку</h3>
+        <form id="newCompilationForm" class="form-grid profile-form" style="margin-top:16px">
+          <label class="field"><span>Название подборки</span><input id="newCompilationTitle" required></label>
+          <label class="field"><span>ID событий через запятую</span><input id="newCompilationEvents" placeholder="Например: 1,2,3"></label>
+          <label class="field"><span><input id="newCompilationPinned" type="checkbox" style="min-height:auto; margin-right:8px">Закрепить на главной</span></label>
+          <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Создать подборку</button></div>
+        </form>
+        <div class="chips" id="compEventHints" style="margin-top:16px"></div>
+      </div>
+      <div class="section-card">
+        <h3>Список подборок</h3>
+        <div id="adminCompilationsList" class="list-grid" style="margin-top:16px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="container section" id="users">
+    <div class="section-head"><div><p class="section-label">Пользователи</p><h2>Зарегистрированные пользователи</h2></div><div class="badge" id="adminUsersMeta">Загрузка...</div></div>
+    <div id="adminUsersList" class="list-grid"></div>
+  </section>
+
+  <section class="container section" id="events">
+    <div class="section-head"><div><p class="section-label">События</p><h2>Модерация и управление событиями</h2></div><div class="badge" id="adminEventsMeta">Загрузка...</div></div>
+    <div id="adminEventsList" class="event-grid"></div>
+  </section>
+
+
+  <section class="container section" id="commentsAdmin">
+    <div class="section-head"><div><p class="section-label">Комментарии</p><h2>Модерация комментариев</h2></div><div class="badge" id="adminCommentsMeta">Загрузка...</div></div>
+    <div class="section-card">
+      <div class="toolbar" style="margin-bottom:16px">
+        <button class="tab-btn active" data-comment-status="PENDING">На модерации</button>
+        <button class="tab-btn" data-comment-status="PUBLISHED">Опубликованные</button>
+        <button class="tab-btn" data-comment-status="REJECTED">Отклонённые</button>
+      </div>
+      <div id="adminCommentsList" class="list-grid"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer"><div class="container">Административное окно для служебных операций.</div></footer>
+
+<div class="modal hidden" id="eventModal">
+  <div class="modal-backdrop" id="closeModalBackdrop"></div><div class="modal-card"><button class="modal-close" id="closeModalBtn">×</button><div id="eventModalContent"></div></div>
+</div>
+<div class="modal hidden" id="authModal">
+  <div class="modal-backdrop" id="closeAuthBackdrop"></div>
+  <div class="auth-card">
+    <button class="modal-close" id="closeAuthBtn">×</button>
+    <p class="section-label">Вход администратора</p>
+    <h2>Авторизация</h2>
+    <form id="loginForm" class="form-grid profile-form">
+      <input id="loginRole" type="hidden" value="admin">
+      <label class="field"><span>Email</span><input id="loginEmail" type="email" value="admin@ewm.local" required></label>
+      <label class="field"><span>Пароль</span><input id="loginPassword" type="password" required></label>
+      <div class="form-note" style="grid-column:1/-1">Для демонстрации: admin@ewm.local / admin123</div>
+      <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Войти</button></div>
+    </form>
+    <form id="registerForm" class="hidden"></form>
+  </div>
+</div>
+
+<script src="/common.js"></script>
+<script src="/admin.js"></script>
+</body>
+</html>
