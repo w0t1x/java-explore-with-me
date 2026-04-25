@@ -36,18 +36,12 @@ async function proxyRequest(req, res, targetBase, prefix) {
     const incomingUrl = new URL(req.url, `http://${req.headers.host}`);
     const targetUrl = new URL(targetBase + incomingUrl.pathname.replace(prefix, '') + incomingUrl.search);
     const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readRequestBody(req);
-
     const headers = { ...req.headers };
     delete headers.host;
     delete headers.connection;
     delete headers['content-length'];
 
-    const upstream = await fetch(targetUrl, {
-      method: req.method,
-      headers,
-      body
-    });
-
+    const upstream = await fetch(targetUrl, { method: req.method, headers, body });
     const responseBody = Buffer.from(await upstream.arrayBuffer());
     const responseHeaders = {};
     upstream.headers.forEach((value, key) => {
@@ -55,7 +49,6 @@ async function proxyRequest(req, res, targetBase, prefix) {
         responseHeaders[key] = value;
       }
     });
-
     res.writeHead(upstream.status, responseHeaders);
     res.end(responseBody);
   } catch (error) {
@@ -70,6 +63,8 @@ async function proxyRequest(req, res, targetBase, prefix) {
 function serveStatic(req, res) {
   let requestPath = req.url.split('?')[0];
   if (requestPath === '/') requestPath = '/index.html';
+  if (requestPath === '/admin') requestPath = '/admin.html';
+  if (requestPath === '/profile') requestPath = '/user.html';
 
   const filePath = path.normalize(path.join(PUBLIC_DIR, requestPath));
   if (!filePath.startsWith(PUBLIC_DIR)) {
@@ -91,9 +86,7 @@ function serveStatic(req, res) {
 const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/main')) return proxyRequest(req, res, MAIN_API, '/api/main');
   if (req.url.startsWith('/api/stats')) return proxyRequest(req, res, STATS_API, '/api/stats');
-  if (req.url === '/config.json') {
-    return sendJson(res, 200, { mainApi: MAIN_API, statsApi: STATS_API, port: PORT });
-  }
+  if (req.url === '/config.json') return sendJson(res, 200, { mainApi: MAIN_API, statsApi: STATS_API, port: PORT });
   serveStatic(req, res);
 });
 

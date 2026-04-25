@@ -3,119 +3,132 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Explore With Me — личный кабинет</title>
+  <title>Explore With Me — профиль пользователя</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<div class="page-shell">
-  <header class="site-header">
-    <div class="container nav-row">
-      <a href="/" class="brand">EXPLORE WITH ME</a>
-      <nav class="nav-links">
-        <a href="/">Главная</a>
-        <a href="#my-events">Мои события</a>
-        <a href="#my-requests">Мои заявки</a>
-      </nav>
-      <div class="header-actions">
-        <span class="page-tag" id="roleLabel">Пользователь</span>
-        <a href="/user.html" id="cabinetLink" class="ghost-btn small hidden">Личный кабинет</a>
-        <a href="/admin.html" id="adminLink" class="ghost-btn small hidden">Админ-панель</a>
-        <button id="openAuthBtn" class="primary-btn">Войти</button>
-        <div id="profileBox" class="inline-actions hidden">
-          <span class="badge accent" id="profileName">Пользователь</span>
-          <button id="logoutBtn" class="ghost-btn small">Выйти</button>
+<header class="site-header">
+  <div class="container nav-row">
+    <a href="/" class="brand">EXPLORE WITH ME</a>
+    <nav class="nav-links">
+      <a href="#dashboard">Профиль</a>
+      <a href="#createEvent">Создать событие</a>
+      <a href="#myEvents">Мои события</a>
+      <a href="#ownerRequests">Заявки в мои события</a>
+      <a href="#myRequests">Мои заявки</a>
+      <a href="#myComments">Мои комментарии</a>
+    </nav>
+    <div class="header-actions">
+      <span class="page-tag" id="roleLabel">Пользователь</span>
+      <a href="/profile" id="cabinetLink" class="ghost-btn small hidden">Профиль</a>
+      <a href="/admin" id="adminLink" class="ghost-btn small hidden">Админ-панель</a>
+      <button id="openAuthBtn" class="primary-btn">Войти</button>
+      <div id="profileBox" class="header-actions hidden">
+        <span class="role-badge" id="profileName">Пользователь</span>
+        <button id="logoutBtn" class="ghost-btn small">Выйти</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="userRoot">
+  <section class="hero" id="dashboard">
+    <div class="container grid-2">
+      <div class="section-card">
+        <p class="section-label">Профиль пользователя</p>
+        <h1 style="font-size:3rem">Личный кабинет</h1>
+        <p class="lead-text">Здесь собраны персональные функции зарегистрированного пользователя: создание событий, просмотр своих мероприятий, работа со входящими и исходящими заявками.</p>
+        <div class="kpi-grid">
+          <div class="kpi"><div>Мои события</div><strong id="myEventsCount">0</strong></div>
+          <div class="kpi"><div>Мои заявки</div><strong id="myRequestsCount">0</strong></div>
+          <div class="kpi"><div>Избранное</div><strong id="myFavoritesCount">0</strong></div>
+        </div>
+      </div>
+      <div class="section-card">
+        <p class="section-label">Данные аккаунта</p>
+        <h2 id="profileTitle">Пользователь</h2>
+        <div class="notice"><strong>Имя:</strong> <span id="userNameValue">—</span></div>
+        <div class="notice"><strong>Email:</strong> <span id="userEmailValue">—</span></div>
+        <div class="toolbar" style="margin-top:18px">
+          <button id="refreshProfileBtn" class="primary-btn">Обновить данные</button>
+          <a href="/" class="secondary-btn">Вернуться на главную</a>
         </div>
       </div>
     </div>
-  </header>
+  </section>
 
-  <main id="userApp">
-    <section class="hero">
-      <div class="container grid-2">
-        <div class="profile-card">
-          <p class="section-label">Личный кабинет</p>
-          <h1 style="font-size:3.2rem">Рабочая зона пользователя</h1>
-          <p class="lead-text">Здесь зарегистрированный пользователь может просматривать свои события, свои заявки на участие и работать с сохранённым избранным.</p>
-          <div class="profile-lines">
-            <div><strong>Имя:</strong> <span id="userNameValue">—</span></div>
-            <div><strong>ID пользователя:</strong> <span id="userIdValue">—</span></div>
-            <div><strong>Роль:</strong> Зарегистрированный пользователь</div>
-          </div>
-          <div class="kpis">
-            <div class="kpi"><div>Мои события</div><strong id="myEventsCount">0</strong></div>
-            <div class="kpi"><div>Мои заявки</div><strong id="myRequestsCount">0</strong></div>
-            <div class="kpi"><div>Избранное</div><strong id="myFavoritesCount">0</strong></div>
-          </div>
-        </div>
-        <div class="notice-card">
-          <p class="section-label">Что доступно пользователю</p>
-          <h2>Основные действия</h2>
-          <ul class="lead-text" style="padding-left:18px; margin-top:16px">
-            <li>просмотр списка собственных событий;</li>
-            <li>просмотр заявок на участие;</li>
-            <li>переход в подробную карточку события;</li>
-            <li>работа с избранными событиями.</li>
-          </ul>
-          <div class="access-actions">
-            <button id="refreshCabinetBtn" class="primary-btn">Обновить кабинет</button>
-            <a href="/" class="secondary-btn">Вернуться на сайт</a>
-          </div>
-        </div>
-      </div>
-    </section>
+  <section class="container section" id="createEvent">
+    <div class="section-head"><div><p class="section-label">Создание события</p><h2>Опубликовать новое мероприятие</h2></div></div>
+    <div class="form-panel">
+      <form id="createEventForm" class="form-grid profile-form">
+        <label class="field"><span>Название</span><input id="eventTitle" required></label>
+        <label class="field"><span>Категория</span><select id="eventCategory" required></select></label>
+        <label class="field field-wide"><span>Краткое описание</span><textarea id="eventAnnotation" required minlength="20"></textarea></label>
+        <div class="form-note" style="grid-column:1/-1">Краткое описание: от 20 до 2000 символов. Полное описание: от 20 до 7000 символов.</div>
+        <label class="field field-wide"><span>Полное описание</span><textarea id="eventDescription" required></textarea></label>
+        <label class="field"><span>Дата события</span><input id="eventDate" type="datetime-local" required></label>
+        <label class="field"><span>Платность</span><select id="eventPaid"><option value="false">Бесплатное</option><option value="true">Платное</option></select></label>
+        <label class="field"><span>Лимит участников</span><input id="eventLimit" type="number" min="0" value="0"></label>
+        <label class="field"><span>Требует модерации заявок</span><select id="eventModeration"><option value="true">Да</option><option value="false">Нет</option></select></label>
+        <div class="form-note" style="grid-column:1/-1">Координаты места проведения в интерфейсе скрыты. Во фронтенде используется стандартная демонстрационная точка.</div>
+        <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Создать событие</button></div>
+      </form>
+    </div>
+  </section>
 
-    <section class="container section" id="my-events">
-      <div class="section-head">
-        <div><p class="section-label">Мои события</p><h2>События пользователя</h2></div>
-        <div class="badge" id="myEventsMeta">Загрузка...</div>
-      </div>
-      <div id="myEventsList" class="event-grid"></div>
-    </section>
+  <section class="container section" id="myEvents">
+    <div class="section-head"><div><p class="section-label">Мои события</p><h2>Список опубликованных мероприятий</h2></div><div class="badge" id="myEventsMeta">Загрузка...</div></div>
+    <div id="myEventsList" class="event-grid"></div>
+  </section>
 
-    <section class="container section" id="my-requests">
-      <div class="section-head">
-        <div><p class="section-label">Мои заявки</p><h2>Участие в мероприятиях</h2></div>
-        <div class="badge" id="myRequestsMeta">Загрузка...</div>
-      </div>
-      <div id="myRequestsList" class="list-grid"></div>
-    </section>
+  <section class="container section" id="ownerRequests">
+    <div class="section-head"><div><p class="section-label">Входящие заявки</p><h2>Заявки на участие в моих событиях</h2></div><div class="badge" id="ownerRequestsMeta">Выберите событие</div></div>
+    <div id="ownerRequestsList" class="list-grid"></div>
+  </section>
 
-    <section class="container section" id="my-favorites">
-      <div class="section-head">
-        <div><p class="section-label">Избранное</p><h2>Сохранённые мероприятия</h2></div>
-      </div>
-      <div id="userFavoritesList" class="favorites-list"></div>
-    </section>
-  </main>
+  <section class="container section" id="myRequests">
+    <div class="section-head"><div><p class="section-label">Мои заявки</p><h2>Запросы на участие</h2></div><div class="badge" id="myRequestsMeta">Загрузка...</div></div>
+    <div id="myRequestsList" class="list-grid"></div>
+  </section>
 
-  <footer class="footer"><div class="container">Личный кабинет зарегистрированного пользователя.</div></footer>
-</div>
+  <section class="container section" id="myComments">
+    <div class="section-head"><div><p class="section-label">Мои комментарии</p><h2>Комментарии пользователя</h2></div><div class="badge" id="myCommentsMeta">Загрузка...</div></div>
+    <div id="myCommentsList" class="list-grid"></div>
+  </section>
+
+  <section class="container section" id="myFavorites">
+    <div class="section-head"><div><p class="section-label">Избранное</p><h2>Сохранённые события</h2></div></div>
+    <div id="userFavoritesList" class="favorites-list"></div>
+  </section>
+</main>
+
+<footer class="footer"><div class="container">Личный кабинет зарегистрированного пользователя.</div></footer>
 
 <div class="modal hidden" id="eventModal">
-  <div class="modal-backdrop" id="closeModalBackdrop"></div>
-  <div class="modal-card">
-    <button class="modal-close" id="closeModalBtn">×</button>
-    <div id="eventModalContent"></div>
-  </div>
+  <div class="modal-backdrop" id="closeModalBackdrop"></div><div class="modal-card"><button class="modal-close" id="closeModalBtn">×</button><div id="eventModalContent"></div></div>
 </div>
-
 <div class="modal hidden" id="authModal">
   <div class="modal-backdrop" id="closeAuthBackdrop"></div>
   <div class="auth-card">
     <button class="modal-close" id="closeAuthBtn">×</button>
-    <p class="section-label">Вход в систему</p>
-    <h2>Выберите роль</h2>
-    <div class="toolbar" style="margin:18px 0 20px">
-      <button type="button" class="role-chip" data-role="guest">Гость</button>
-      <button type="button" class="role-chip" data-role="user">Пользователь</button>
-      <button type="button" class="role-chip" data-role="admin">Администратор</button>
+    <p class="section-label">Вход</p>
+    <h2>Авторизация пользователя</h2>
+    <div class="auth-switch" style="margin:18px 0 20px">
+      <button type="button" class="tab-btn active" id="authModeLogin">Вход</button>
+      <button type="button" class="tab-btn" id="authModeRegister">Регистрация</button>
     </div>
-    <form id="authForm" class="form-grid compact">
-      <input type="hidden" id="authRole" value="user">
-      <label class="field"><span>Имя</span><input id="authName"></label>
-      <label class="field"><span>ID пользователя</span><input id="authUserId"></label>
-      <label class="field hidden" id="adminCodeWrap"><span>Код администратора</span><input id="authAdminCode" placeholder="admin123"></label>
-      <div class="auth-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Войти</button></div>
+    <form id="loginForm" class="form-grid profile-form">
+      <input id="loginRole" type="hidden" value="user">
+      <label class="field"><span>Email</span><input id="loginEmail" type="email" required></label>
+      <label class="field"><span>Пароль</span><input id="loginPassword" type="password" required></label>
+      <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Войти</button></div>
+    </form>
+    <form id="registerForm" class="form-grid profile-form hidden">
+      <label class="field"><span>Имя</span><input id="registerName" type="text" required></label>
+      <label class="field"><span>Email</span><input id="registerEmail" type="email" required></label>
+      <label class="field"><span>Пароль</span><input id="registerPassword" type="password" required></label>
+      <label class="field"><span>Повторите пароль</span><input id="registerPasswordConfirm" type="password" required></label>
+      <div class="form-actions" style="grid-column:1/-1"><button class="primary-btn" type="submit">Зарегистрироваться</button></div>
     </form>
   </div>
 </div>
