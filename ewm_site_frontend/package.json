@@ -1,0 +1,9 @@
+{
+  "name": "ewm-site-frontend-v3",
+  "version": "3.0.0",
+  "private": true,
+  "description": "Готовый фронтенд для Explore With Me с ролями гостя, пользователя и администратора",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
