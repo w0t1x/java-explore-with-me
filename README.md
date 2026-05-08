@@ -139,6 +139,26 @@ mvn -f pom.xml spring-boot:run
 http://localhost:8080
 ```
 
+#### 3.3. Запуск `ewm_site_frontend`
+Прописываем в PowerShell:
+1. Переходим в директорию где у нас написан frontend
+   
+```bash
+cd ewm_site_frontend
+```
+
+2. Запускаем:
+   
+```bash
+node server.js
+```
+
+Сервис будет доступен по адресу:
+
+```text
+http://localhost:4174
+```
+
 ---
 
 ### 4. Проверка работоспособности
